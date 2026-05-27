@@ -1289,6 +1289,8 @@ pub enum LlmProviderChoice {
     Copilot,
     /// OpenCode Zen/Go cloud API.
     Opencode,
+    /// Cursor Composer via local `@cursor/sdk` bridge (fork).
+    Cursor,
 }
 
 /// Arguments for `embed`.

@@ -39,12 +39,13 @@ pub const DEFAULT_REQUEST_TIMEOUT_SECS: u64 = 300;
 pub mod anthropic;
 pub mod auth;
 pub mod copilot;
+pub mod cursor;
 pub mod embedding;
 pub mod error;
 pub mod factory;
 pub mod gemini;
-pub mod google;
 pub mod health;
+pub mod google;
 pub mod oidc;
 pub mod openai;
 pub mod openai_compat;
@@ -66,6 +67,7 @@ pub use copilot::{
     GITHUB_ACCESS_TOKEN_URL, GITHUB_COPILOT_CLIENT_ID, GITHUB_COPILOT_TOKEN_URL,
     GITHUB_DEVICE_CODE_URL,
 };
+pub use cursor::{CursorProviderConfig, CursorSdkProvider};
 pub use embedding::{
     Embedder, OpenAiCompatEmbedder, OpenAiEmbedder, SyntheticEmbedder, VoyageEmbedder, cosine,
 };
@@ -75,10 +77,10 @@ pub use factory::{
     default_embedding_dim, try_default_embedding_dim,
 };
 pub use gemini::GeminiProvider;
-pub use google::{DEFAULT_MODEL as GOOGLE_DEFAULT_EMBED_MODEL, GoogleEmbedder};
 pub use health::{
     ProviderHealth, ProviderHealthSnapshot, ProviderHealthStatus, ProviderRoleHealthSnapshot,
 };
+pub use google::{DEFAULT_MODEL as GOOGLE_DEFAULT_EMBED_MODEL, GoogleEmbedder};
 pub use oidc::{
     DeviceAuthorizationResponse, OIDC_DEFAULT_SCOPE, OidcDiscovery, OidcExtras, OidcToken,
     OidcTokenResponse, PollOutcome, discover, poll_token_once, refresh_access_token,

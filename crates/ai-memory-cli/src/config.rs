@@ -319,6 +319,10 @@ pub struct RuntimeEnv {
     copilot_client_id: Option<String>,
     voyage_api_key: Option<SecretString>,
     opencode_api_key: Option<SecretString>,
+    pub cursor_api_key: Option<SecretString>,
+    pub cursor_agent_cwd: Option<String>,
+    pub cursor_timeout_ms: Option<u64>,
+    pub cursor_model_fast: Option<bool>,
 }
 
 impl RuntimeEnv {
@@ -358,6 +362,10 @@ impl RuntimeEnv {
             copilot_client_id: env_string("AI_MEMORY_COPILOT_CLIENT_ID"),
             voyage_api_key: env_secret("VOYAGE_API_KEY"),
             opencode_api_key: env_secret("OPENCODE_API_KEY"),
+            cursor_api_key: env_secret("CURSOR_API_KEY"),
+            cursor_agent_cwd: env_string("CURSOR_AGENT_CWD"),
+            cursor_timeout_ms: env_u64("CURSOR_TIMEOUT_MS"),
+            cursor_model_fast: env_bool("CURSOR_MODEL_FAST"),
         }
     }
 
@@ -982,10 +990,11 @@ impl Config {
             "copilot" | "github-copilot" | "github_copilot" => ProviderChoice::Copilot,
             "anthropic-oauth" | "anthropic_oauth" => ProviderChoice::AnthropicOAuth,
             "opencode" | "opencode-zen" | "opencode_zen" => ProviderChoice::OpenCode,
+            "cursor" => ProviderChoice::Cursor,
             other => {
                 return Err(LlmError::NotConfigured(format!(
                     "AI_MEMORY_LLM_PROVIDER={other} is not one of \
-                     anthropic|openai|gemini|openai-compat|openai-oauth|copilot|anthropic-oauth|opencode"
+                     anthropic|openai|gemini|openai-compat|openai-oauth|copilot|anthropic-oauth|opencode|cursor"
                 )));
             }
         };
@@ -1006,8 +1015,17 @@ impl Config {
                     ));
                 }
                 ProviderChoice::OpenCode => OPENCODE_DEFAULT_MODEL.to_string(),
+                ProviderChoice::Cursor => {
+                    env_string("CURSOR_MODEL").unwrap_or_else(|| "composer-2.5".to_string())
+                }
             },
         };
+        let cursor_cwd = match provider {
+            ProviderChoice::Cursor => Some(self.cursor_working_directory()?),
+            _ => None,
+        };
+        let cursor_timeout_ms = self.runtime_env.cursor_timeout_ms.unwrap_or(120_000);
+        let cursor_model_fast = self.runtime_env.cursor_model_fast.unwrap_or(false);
         Ok(Some(ProviderConfig {
             provider,
             model,
@@ -1021,7 +1039,23 @@ impl Config {
                 .or_else(|| self.runtime_env.llm_base_url.clone()),
             compat_strict: self.llm_compat_strict,
             request_timeout_secs: self.llm_timeout_secs,
+            cursor_cwd,
+            cursor_timeout_ms,
+            cursor_model_fast,
         }))
+    }
+
+    /// Working directory handed to the Cursor agent bridge. Explicit
+    /// `CURSOR_AGENT_CWD` wins; otherwise fall back to the wrapper-forwarded
+    /// host cwd, then to the data dir.
+    pub(crate) fn cursor_working_directory(&self) -> LlmResult<std::path::PathBuf> {
+        if let Some(cwd) = non_empty(self.runtime_env.cursor_agent_cwd.as_deref()) {
+            return Ok(std::path::PathBuf::from(cwd));
+        }
+        if let Some(host) = self.runtime_env.host_cwd() {
+            return Ok(std::path::PathBuf::from(host));
+        }
+        Ok(self.data_dir.clone())
     }
 
     /// OpenAI-compatible embedding key. Direct OpenAI keeps requiring
@@ -1160,6 +1194,7 @@ impl Config {
             ProviderChoice::Copilot => None,
             ProviderChoice::AnthropicOAuth => None,
             ProviderChoice::OpenCode => self.runtime_env.opencode_api_key.clone(),
+            ProviderChoice::Cursor => self.runtime_env.cursor_api_key.clone(),
         }
     }
 
@@ -1262,6 +1297,19 @@ fn env_path(name: &str) -> Option<PathBuf> {
 
 fn env_secret(name: &str) -> Option<SecretString> {
     env_string(name).map(SecretString::from)
+}
+
+fn env_u64(name: &str) -> Option<u64> {
+    env_string(name).and_then(|s| s.parse().ok())
+}
+
+fn env_bool(name: &str) -> Option<bool> {
+    let s = env_string(name)?;
+    match s.to_lowercase().as_str() {
+        "1" | "true" | "yes" | "on" => Some(true),
+        "0" | "false" | "no" | "off" => Some(false),
+        _ => None,
+    }
 }
 
 fn non_empty(s: Option<&str>) -> Option<&str> {

@@ -7,8 +7,12 @@ use std::sync::Arc;
 
 use secrecy::{ExposeSecret, SecretString};
 
+use std::path::PathBuf;
+
 use crate::AnthropicProvider;
 use crate::CopilotProvider;
+use crate::CursorProviderConfig;
+use crate::CursorSdkProvider;
 use crate::GeminiProvider;
 use crate::OpenAiCompatProvider;
 use crate::OpenAiOAuthProvider;
@@ -39,6 +43,8 @@ pub enum ProviderChoice {
     AnthropicOAuth,
     /// OpenCode Zen/Go cloud API (OpenAI-compatible endpoint).
     OpenCode,
+    /// Cursor Composer via local `@cursor/sdk` bridge (fork; Node).
+    Cursor,
 }
 
 impl ProviderChoice {
@@ -54,6 +60,7 @@ impl ProviderChoice {
             Self::Copilot => "copilot",
             Self::AnthropicOAuth => "anthropic-oauth",
             Self::OpenCode => "opencode",
+            Self::Cursor => "cursor",
         }
     }
 
@@ -79,6 +86,9 @@ impl ProviderChoice {
             Self::OpenCode => AuthRequirement::RequiredApiKey {
                 env_var: "OPENCODE_API_KEY",
             },
+            Self::Cursor => AuthRequirement::RequiredApiKey {
+                env_var: "CURSOR_API_KEY",
+            },
         }
     }
 }
@@ -103,6 +113,12 @@ pub struct ProviderConfig {
     /// Sourced once from `AI_MEMORY_LLM_TIMEOUT_SECS` by `Config::load`;
     /// defaults to [`crate::DEFAULT_REQUEST_TIMEOUT_SECS`].
     pub request_timeout_secs: u64,
+    /// Cursor bridge: agent working directory (`CURSOR_AGENT_CWD`).
+    pub cursor_cwd: Option<PathBuf>,
+    /// Cursor bridge: wall-clock timeout in milliseconds.
+    pub cursor_timeout_ms: u64,
+    /// Cursor bridge: Composer `fast` param.
+    pub cursor_model_fast: bool,
 }
 
 /// Embedding providers available to ai-memory.
@@ -212,6 +228,7 @@ pub fn default_embedding_dim(provider: EmbedderChoice, model: &str) -> u32 {
 /// default. Self-hosted OpenAI-compatible models require an explicit value.
 #[must_use]
 pub fn try_default_embedding_dim(provider: EmbedderChoice, model: &str) -> Option<u32> {
+    let model = model.strip_prefix("models/").unwrap_or(model);
     match (provider, model) {
         (EmbedderChoice::OpenAi, "text-embedding-3-small") => Some(1536),
         (EmbedderChoice::OpenAi, "text-embedding-3-large") => Some(3072),
@@ -289,6 +306,30 @@ pub fn build_provider(config: ProviderConfig) -> LlmResult<Arc<dyn LlmProvider>>
                 OpenCodeProvider::new(key, config.model)?.with_timeout_secs(timeout),
             ))
         }
+        ProviderChoice::Cursor => {
+            let key = config.auth.require_api_key()?;
+            let (bridge_script, node_bin) = CursorSdkProvider::resolve_paths()?;
+            let cwd = config.cursor_cwd.ok_or_else(|| {
+                LlmError::NotConfigured(
+                    "cursor provider needs cursor_cwd (set CURSOR_AGENT_CWD or AI_MEMORY_DATA_DIR)"
+                        .into(),
+                )
+            })?;
+            let timeout_ms = if config.cursor_timeout_ms == 0 {
+                120_000
+            } else {
+                config.cursor_timeout_ms
+            };
+            Ok(Arc::new(CursorSdkProvider::new(CursorProviderConfig {
+                api_key: key,
+                model: config.model,
+                cwd,
+                timeout_ms,
+                model_fast: config.cursor_model_fast,
+                bridge_script,
+                node_bin,
+            })?))
+        }
     }
 }
 
@@ -334,6 +375,18 @@ mod tests {
             ProviderChoice::AnthropicOAuth.auth_requirement(),
             AuthRequirement::AnthropicOAuthToken
         );
+        assert_eq!(
+            ProviderChoice::OpenCode.auth_requirement(),
+            AuthRequirement::RequiredApiKey {
+                env_var: "OPENCODE_API_KEY"
+            }
+        );
+        assert_eq!(
+            ProviderChoice::Cursor.auth_requirement(),
+            AuthRequirement::RequiredApiKey {
+                env_var: "CURSOR_API_KEY"
+            }
+        );
     }
 
     #[test]
@@ -345,6 +398,9 @@ mod tests {
             base_url: None,
             compat_strict: false,
             request_timeout_secs: crate::DEFAULT_REQUEST_TIMEOUT_SECS,
+            cursor_cwd: None,
+            cursor_timeout_ms: 120_000,
+            cursor_model_fast: false,
         };
 
         let err = match build_provider(cfg) {
