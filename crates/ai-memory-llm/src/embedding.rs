@@ -24,10 +24,6 @@ use crate::openai::normalize_openai_base;
 use crate::response::{provider_error_body, response_json_limited, response_text_limited};
 use crate::text::{truncate_for_embedding, truncate_with_ellipsis};
 
-/// Conservative per-request input cap for OpenAI-compatible embedding APIs
-/// (8192 token server limit; we stay well below with head truncation).
-const OPENAI_EMBED_MAX_TOKENS: usize = 5000;
-
 /// Provider-agnostic embedding API.
 ///
 /// Implementations must be `Send + Sync` (the MCP server / hook
@@ -66,6 +62,7 @@ pub struct OpenAiEmbedder {
     base_url: String,
     model: String,
     dim: u32,
+    max_input_bytes: usize,
 }
 
 impl OpenAiEmbedder {
@@ -74,7 +71,12 @@ impl OpenAiEmbedder {
     /// # Errors
     /// Propagates any `reqwest::Error` thrown while building the HTTP
     /// client.
-    pub fn new(api_key: SecretString, model: impl Into<String>, dim: u32) -> LlmResult<Self> {
+    pub fn new(
+        api_key: SecretString,
+        model: impl Into<String>,
+        dim: u32,
+        max_input_bytes: usize,
+    ) -> LlmResult<Self> {
         // 120s tolerates a cold-load of the embedding model on Ollama
         // (small model, but still up to ~30s on first request after
         // unload). Subsequent requests with OLLAMA_KEEP_ALIVE warm are
@@ -89,6 +91,7 @@ impl OpenAiEmbedder {
             base_url: "https://api.openai.com".into(),
             model: model.into(),
             dim,
+            max_input_bytes,
         })
     }
 
@@ -194,9 +197,10 @@ async fn openai_style_embed(
     api_key: Option<&SecretString>,
     model: &str,
     dim: u32,
+    max_input_bytes: usize,
     text: &str,
 ) -> LlmResult<Vec<f32>> {
-    let input = truncate_for_embedding(text, OPENAI_EMBED_MAX_TOKENS);
+    let input = truncate_for_embedding(text, max_input_bytes);
     let url = normalize_openai_base(base_url, "embeddings");
     debug!(
         url,
@@ -272,6 +276,7 @@ impl Embedder for OpenAiEmbedder {
             Some(&self.api_key),
             &self.model,
             self.dim,
+            self.max_input_bytes,
             text,
         )
         .await
@@ -290,6 +295,7 @@ pub struct OpenAiCompatEmbedder {
     base_url: String,
     model: String,
     dim: u32,
+    max_input_bytes: usize,
 }
 
 impl OpenAiCompatEmbedder {
@@ -303,6 +309,7 @@ impl OpenAiCompatEmbedder {
         api_key: Option<SecretString>,
         model: impl Into<String>,
         dim: u32,
+        max_input_bytes: usize,
     ) -> LlmResult<Self> {
         // Same cold-load tolerance as OpenAiEmbedder: first request
         // after an Ollama model unload can take ~30s.
@@ -315,6 +322,7 @@ impl OpenAiCompatEmbedder {
             base_url: base_url.into(),
             model: model.into(),
             dim,
+            max_input_bytes,
         })
     }
 }
@@ -340,6 +348,7 @@ impl Embedder for OpenAiCompatEmbedder {
             self.api_key.as_ref(),
             &self.model,
             self.dim,
+            self.max_input_bytes,
             text,
         )
         .await
@@ -353,6 +362,7 @@ pub struct VoyageEmbedder {
     base_url: String,
     model: String,
     dim: u32,
+    max_input_bytes: usize,
 }
 
 impl VoyageEmbedder {
@@ -360,7 +370,12 @@ impl VoyageEmbedder {
     ///
     /// # Errors
     /// Propagates the HTTP client construction error.
-    pub fn new(api_key: SecretString, model: impl Into<String>, dim: u32) -> LlmResult<Self> {
+    pub fn new(
+        api_key: SecretString,
+        model: impl Into<String>,
+        dim: u32,
+        max_input_bytes: usize,
+    ) -> LlmResult<Self> {
         // 120s tolerates a cold-load of the embedding model on Ollama
         // (small model, but still up to ~30s on first request after
         // unload). Subsequent requests with OLLAMA_KEEP_ALIVE warm are
@@ -375,6 +390,7 @@ impl VoyageEmbedder {
             base_url: "https://api.voyageai.com".into(),
             model: model.into(),
             dim,
+            max_input_bytes,
         })
     }
 
@@ -417,9 +433,10 @@ impl Embedder for VoyageEmbedder {
     }
 
     async fn embed(&self, text: &str) -> LlmResult<Vec<f32>> {
+        let input = truncate_for_embedding(text, self.max_input_bytes);
         let url = normalize_openai_base(&self.base_url, "embeddings");
         let req = VoyageRequest {
-            input: [text],
+            input: [&input],
             model: &self.model,
         };
         let resp = self

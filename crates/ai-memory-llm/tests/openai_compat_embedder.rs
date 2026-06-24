@@ -44,7 +44,13 @@ async fn keyless_embed_sends_no_authorization_header() {
         .mount(&server)
         .await;
 
-    let e = OpenAiCompatEmbedder::new(format!("{}/v1", server.uri()), None, "nomic-embed-text", 8)
+    let e = OpenAiCompatEmbedder::new(
+        format!("{}/v1", server.uri()),
+        None,
+        "nomic-embed-text",
+        8,
+        ai_memory_llm::DEFAULT_EMBEDDING_MAX_BYTES,
+    )
         .expect("embedder builds");
     assert_eq!(e.provider(), "openai-compat");
     assert_eq!(e.provider(), EmbedderChoice::OpenAiCompat.name());
@@ -71,6 +77,7 @@ async fn configured_key_is_sent_as_bearer() {
         Some(SecretString::from("sk-gateway")),
         "nomic-embed-text",
         8,
+        ai_memory_llm::DEFAULT_EMBEDDING_MAX_BYTES,
     )
     .expect("embedder builds");
     e.embed("hello").await.expect("embed succeeds");
@@ -84,6 +91,7 @@ async fn factory_builds_compat_embedder_and_requires_base_url() {
         dim: 768,
         api_key: SecretString::from(String::new()),
         base_url: Some("http://localhost:11434/v1".into()),
+        max_input_bytes: ai_memory_llm::DEFAULT_EMBEDDING_MAX_BYTES,
     })
     .expect("factory builds compat embedder");
     assert_eq!(ok.provider(), "openai-compat");
@@ -95,6 +103,7 @@ async fn factory_builds_compat_embedder_and_requires_base_url() {
         dim: 768,
         api_key: SecretString::from(String::new()),
         base_url: None,
+        max_input_bytes: ai_memory_llm::DEFAULT_EMBEDDING_MAX_BYTES,
     }) {
         Ok(_) => panic!("compat embedder must not build without a base URL"),
         Err(err) => err,
@@ -110,6 +119,7 @@ async fn factory_builds_compat_embedder_and_requires_base_url() {
         dim: 0,
         api_key: SecretString::from(String::new()),
         base_url: Some("http://localhost:11434/v1".into()),
+        max_input_bytes: ai_memory_llm::DEFAULT_EMBEDDING_MAX_BYTES,
     });
     assert!(
         matches!(zero_dim, Err(LlmError::NotConfigured(ref msg)) if msg.contains("greater than zero")),

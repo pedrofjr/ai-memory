@@ -1,5 +1,9 @@
 //! Small text helpers shared by provider implementations.
 
+/// Default per-request embedding input cap (bytes). Matches the historical
+/// hard ceiling before `AI_MEMORY_EMBEDDING_MAX_BYTES` was configurable.
+pub const DEFAULT_EMBEDDING_MAX_BYTES: usize = 8_000;
+
 /// Truncate to at most `max_bytes` without splitting a UTF-8 codepoint.
 pub(crate) fn truncate_with_ellipsis(s: &str, max_bytes: usize) -> String {
     if s.len() <= max_bytes {
@@ -30,14 +34,12 @@ pub(crate) fn suffix_within_bytes(s: &str, max_bytes: usize) -> &str {
     &s[start..]
 }
 
-/// Truncate text so it fits provider input limits (e.g. OpenAI/OpenRouter
-/// 8192 tokens). Dense markdown/code can approach ~1 byte/token, so we cap
-/// both a token budget (optimistic prose) and a hard byte ceiling.
-pub(crate) fn truncate_for_embedding(text: &str, max_tokens: usize) -> String {
-    const HARD_MAX_BYTES: usize = 8_000;
+/// Truncate wiki/query text before sending it to an embedding provider.
+///
+/// `max_bytes` comes from config (`AI_MEMORY_EMBEDDING_MAX_BYTES`), defaulting
+/// to [`DEFAULT_EMBEDDING_MAX_BYTES`].
+pub fn truncate_for_embedding(text: &str, max_bytes: usize) -> String {
     const ELLIPSIS_BYTES: usize = "…".len();
-    let token_budget_bytes = max_tokens.saturating_mul(3);
-    let max_bytes = token_budget_bytes.min(HARD_MAX_BYTES);
     if text.len() <= max_bytes {
         return text.to_string();
     }
@@ -74,9 +76,18 @@ mod tests {
     #[test]
     fn truncate_for_embedding_caps_long_input() {
         let long = "x".repeat(50_000);
-        let out = truncate_for_embedding(&long, 6000);
+        let out = truncate_for_embedding(&long, DEFAULT_EMBEDDING_MAX_BYTES);
         assert!(out.ends_with('…'));
         assert!(out.len() < long.len());
-        assert!(out.len() <= 8_000);
+        assert!(out.len() <= DEFAULT_EMBEDDING_MAX_BYTES);
+    }
+
+    #[test]
+    fn truncate_for_embedding_respects_configured_cap() {
+        let long = "x".repeat(50_000);
+        let out = truncate_for_embedding(&long, 32_000);
+        assert!(out.ends_with('…'));
+        assert!(out.len() <= 32_000);
+        assert!(out.len() > DEFAULT_EMBEDDING_MAX_BYTES);
     }
 }
