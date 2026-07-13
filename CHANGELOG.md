@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Named **openai-compat provider presets** so operators can set
+  `AI_MEMORY_LLM_PROVIDER=openrouter|groq|ollama|…` without hand-writing
+  `LLM_BASE_URL`. Presets reuse the existing Chat Completions client with a
+  fixed base URL, preferred API-key env var, and default model. Local presets
+  (`ollama`, `lm-studio`, `vllm`, `llama-cpp`) keep optional keys. Base URLs
+  and catalog defaults follow the oh-my-pi model registry (MIT). See
+  `ai_memory_llm::presets` and `docs/install.md` § Named openai-compat presets.
+- `ai-memory llm-test --provider` now accepts free-form names (native clients
+  and presets) instead of a fixed clap enum.
+- **OpenAI Responses** wire client (`AI_MEMORY_LLM_PROVIDER=openai-responses`)
+  for Platform API-key access to `/v1/responses` with JSON-schema structured
+  output.
+- **xAI Grok** via Responses (`xai` / `grok` + `XAI_API_KEY`) and **SuperGrok
+  OAuth** (`xai-oauth` / `supergrok`, `ai-memory auth login xai-oauth`).
+- **Azure OpenAI Responses** (`azure-openai` + `AZURE_OPENAI_API_KEY` +
+  endpoint/base URL + deployment model name).
+- **Devin / Codeium Cascade** provider (`devin`) with Connect-RPC framing,
+  minimal protobuf encode/decode for GetUserJwt + GetChatMessage text, session
+  token via `DEVIN_API_KEY` or `ai-memory auth login devin` (PKCE).
+
 ## [1.12.0] - 2026-07-12
 
 ### Added

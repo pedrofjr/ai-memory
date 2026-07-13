@@ -1,0 +1,60 @@
+Third-Party Notices
+===================
+
+This project incorporates ideas, base URL catalog values, and (where noted)
+logic ported or adapted from the following open-source projects. Their
+copyright notices and license terms are reproduced below as required by
+their respective licenses.
+
+-------------------------------------------------------------------------------
+
+oh-my-pi (MIT)
+https://github.com/can1357/oh-my-pi
+
+The following material was adapted from oh-my-pi for ai-memory's LLM layer:
+
+  - OpenAI-compatible provider base URLs and naming conventions from
+    `packages/catalog/src/models.json` and `packages/ai/src/registry/`
+    → `crates/ai-memory-llm/src/presets.rs`
+  - Design pattern of registry presets over a small set of wire dialects
+    (Chat Completions / Responses / Anthropic Messages / Google)
+  - xAI SuperGrok OAuth PKCE flow from
+    `packages/ai/src/registry/oauth/xai-oauth.ts`
+    → `crates/ai-memory-llm/src/xai_oauth.rs` and CLI `auth login xai-oauth`
+  - Devin / Cascade Connect-RPC client shape and OAuth from
+    `packages/ai/src/providers/devin.ts` and
+    `packages/ai/src/registry/oauth/devin.ts` (also adapted via the
+    community devin-proxy project)
+    → `crates/ai-memory-llm/src/devin.rs` and CLI `auth login devin`
+  - OpenAI Responses request/response shapes aligned with
+    `packages/ai/src/providers/openai-responses.ts`
+    → `crates/ai-memory-llm/src/openai_responses.rs`
+
+ai-memory does not vendor the oh-my-pi agent runtime, TUI, or tool harness.
+
+Original license:
+
+    MIT License
+
+    Copyright (c) 2025 Mario Zechner
+    Copyright (c) 2025-2026 Can Bölük
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the Software), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED AS IS, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
+-------------------------------------------------------------------------------

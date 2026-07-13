@@ -279,6 +279,10 @@ pub enum AuthProviderChoice {
     /// per-developer token the lifecycle hooks use to authenticate to the
     /// ai-memory server, instead of a shared static `--auth-token`.
     OidcDevice,
+    /// xAI SuperGrok subscription OAuth (PKCE loopback).
+    XaiOauth,
+    /// Devin / Cascade CLI OAuth (PKCE loopback).
+    Devin,
 }
 
 /// Arguments for `auth login`.
@@ -945,26 +949,13 @@ pub struct CommitArgs {
     pub message: String,
 }
 
-/// LLM provider for `llm-test`.
-#[derive(Debug, Clone, Copy, clap::ValueEnum)]
-pub enum LlmProviderChoice {
-    /// Anthropic Messages API.
-    Anthropic,
-    /// Anthropic Messages API using a Claude subscription OAuth token.
-    AnthropicOauth,
-    /// OpenAI Chat Completions.
-    Openai,
-    /// Google Gemini (Generative Language API).
-    Gemini,
-    /// OpenAI-compatible local (Ollama, vLLM, LM Studio).
-    OpenaiCompat,
-    /// OpenAI ChatGPT/Codex OAuth backend.
-    OpenaiOauth,
-    /// GitHub Copilot Chat backend.
-    Copilot,
-    /// OpenCode Zen/Go cloud API.
-    Opencode,
-}
+/// LLM provider names accepted by `llm-test`.
+///
+/// Kept as free-form strings so named openai-compat presets
+/// (`openrouter`, `groq`, `ollama`, …) work without expanding the
+/// clap enum every time a gateway is added. See
+/// `ai_memory_llm::presets` and `Config::llm_test_provider_config`.
+pub type LlmProviderName = String;
 
 /// Arguments for `embed`.
 #[derive(Debug, Args)]
@@ -1159,16 +1150,20 @@ pub struct PendingWriteRejectArgs {
 /// Arguments for `llm-test`.
 #[derive(Debug, Args)]
 pub struct LlmTestArgs {
-    /// Provider to test.
-    #[arg(long, value_enum)]
-    pub provider: LlmProviderChoice,
+    /// Provider to test: native (`anthropic`, `openai`, `gemini`,
+    /// `openai-compat`, `openai-oauth`, `copilot`, `anthropic-oauth`,
+    /// `opencode`) or a named openai-compat preset (`openrouter`,
+    /// `groq`, `xai`, `ollama`, `lm-studio`, …).
+    #[arg(long)]
+    pub provider: LlmProviderName,
     /// Model identifier (e.g. `claude-sonnet-4-6`, `gpt-4o-mini`, `llama3.1:8b`).
     #[arg(long)]
     pub model: String,
     /// Prompt to send.
     #[arg(long)]
     pub prompt: String,
-    /// Base URL override (required for openai-compat).
+    /// Base URL override (required for bare `openai-compat`; optional
+    /// override for named presets).
     #[arg(long)]
     pub base_url: Option<String>,
     /// Optional API key override (otherwise pulled from env).
@@ -1885,7 +1880,7 @@ mod tests {
         let Command::LlmTest(args) = cli.command else {
             panic!("expected llm-test command");
         };
-        assert!(matches!(args.provider, LlmProviderChoice::AnthropicOauth));
+        assert_eq!(args.provider, "anthropic-oauth");
         assert_eq!(args.model, "claude-sonnet-4-6");
         assert_eq!(args.prompt, "ping");
     }

@@ -9,11 +9,15 @@ use secrecy::SecretString;
 
 use crate::AnthropicProvider;
 use crate::CopilotProvider;
+use crate::DevinProvider;
+use crate::DevinToken;
 use crate::GeminiProvider;
 use crate::OpenAiCompatProvider;
 use crate::OpenAiOAuthProvider;
 use crate::OpenAiProvider;
+use crate::OpenAiResponsesProvider;
 use crate::OpenCodeProvider;
+use crate::XaiOAuthProvider;
 use crate::auth::{AuthRequirement, ProviderAuth};
 use crate::embedding::{Embedder, OpenAiEmbedder, VoyageEmbedder};
 use crate::error::{LlmError, LlmResult};
@@ -39,6 +43,16 @@ pub enum ProviderChoice {
     AnthropicOAuth,
     /// OpenCode Zen/Go cloud API (OpenAI-compatible endpoint).
     OpenCode,
+    /// OpenAI Platform Responses API (`/v1/responses`) with API key.
+    OpenAiResponses,
+    /// xAI Grok Responses API with API key.
+    Xai,
+    /// xAI SuperGrok OAuth → Responses API.
+    XaiOauth,
+    /// Azure OpenAI Responses API.
+    AzureOpenAi,
+    /// Devin / Codeium Cascade Connect-RPC.
+    Devin,
 }
 
 impl ProviderChoice {
@@ -54,6 +68,11 @@ impl ProviderChoice {
             Self::Copilot => "copilot",
             Self::AnthropicOAuth => "anthropic-oauth",
             Self::OpenCode => "opencode",
+            Self::OpenAiResponses => "openai-responses",
+            Self::Xai => "xai",
+            Self::XaiOauth => "xai-oauth",
+            Self::AzureOpenAi => "azure-openai",
+            Self::Devin => "devin",
         }
     }
 
@@ -64,7 +83,7 @@ impl ProviderChoice {
             Self::Anthropic => AuthRequirement::RequiredApiKey {
                 env_var: "ANTHROPIC_API_KEY",
             },
-            Self::OpenAi => AuthRequirement::RequiredApiKey {
+            Self::OpenAi | Self::OpenAiResponses => AuthRequirement::RequiredApiKey {
                 env_var: "OPENAI_API_KEY",
             },
             Self::Gemini => AuthRequirement::RequiredApiKey {
@@ -79,6 +98,14 @@ impl ProviderChoice {
             Self::OpenCode => AuthRequirement::RequiredApiKey {
                 env_var: "OPENCODE_API_KEY",
             },
+            Self::Xai => AuthRequirement::RequiredApiKey {
+                env_var: "XAI_API_KEY",
+            },
+            Self::XaiOauth => AuthRequirement::XaiOAuthToken,
+            Self::AzureOpenAi => AuthRequirement::RequiredApiKey {
+                env_var: "AZURE_OPENAI_API_KEY",
+            },
+            Self::Devin => AuthRequirement::DevinToken,
         }
     }
 }
@@ -99,6 +126,9 @@ pub struct ProviderConfig {
     /// parser. Ignored by every other provider. Sourced once from
     /// `AI_MEMORY_LLM_COMPAT_STRICT` by `Config::load`.
     pub compat_strict: bool,
+    /// Optional static name override for openai-compat presets
+    /// (`openrouter`, `groq`, …). Ignored by every other provider.
+    pub name_override: Option<&'static str>,
 }
 
 /// Embedding providers available to ai-memory.
@@ -212,10 +242,20 @@ pub fn build_provider(config: ProviderConfig) -> LlmResult<Arc<dyn LlmProvider>>
             let base = config
                 .base_url
                 .ok_or_else(|| LlmError::NotConfigured("LLM_BASE_URL".into()))?;
-            Ok(Arc::new(
-                OpenAiCompatProvider::new(base, config.auth.optional_api_key(), config.model)?
-                    .with_strict(config.compat_strict),
-            ))
+            // Named presets declare RequiredApiKey; generic openai-compat
+            // stays OptionalApiKey for local engines that accept no auth.
+            let api_key = match config.auth.requirement() {
+                crate::auth::AuthRequirement::RequiredApiKey { .. } => {
+                    Some(config.auth.require_api_key()?)
+                }
+                _ => config.auth.optional_api_key(),
+            };
+            let mut provider = OpenAiCompatProvider::new(base, api_key, config.model)?
+                .with_strict(config.compat_strict);
+            if let Some(name) = config.name_override {
+                provider = provider.with_name(name);
+            }
+            Ok(Arc::new(provider))
         }
         ProviderChoice::OpenAiOAuth => {
             let path = config.auth.require_openai_oauth_token_file()?.to_path_buf();
@@ -236,6 +276,56 @@ pub fn build_provider(config: ProviderConfig) -> LlmResult<Arc<dyn LlmProvider>>
         ProviderChoice::OpenCode => {
             let key = config.auth.require_api_key()?;
             Ok(Arc::new(OpenCodeProvider::new(key, config.model)?))
+        }
+        ProviderChoice::OpenAiResponses => {
+            let key = config.auth.require_api_key()?;
+            let mut provider = OpenAiResponsesProvider::openai(key, config.model)?;
+            if let Some(url) = config.base_url {
+                provider = provider.with_base_url(url);
+            }
+            Ok(Arc::new(provider))
+        }
+        ProviderChoice::Xai => {
+            let key = config.auth.require_api_key()?;
+            let mut provider = OpenAiResponsesProvider::xai(key, config.model)?;
+            if let Some(url) = config.base_url {
+                provider = provider.with_base_url(url);
+            }
+            Ok(Arc::new(provider))
+        }
+        ProviderChoice::XaiOauth => {
+            let path = config.auth.require_xai_oauth_token_file()?.to_path_buf();
+            Ok(Arc::new(XaiOAuthProvider::new(path, config.model)?))
+        }
+        ProviderChoice::AzureOpenAi => {
+            let key = config.auth.require_api_key()?;
+            let base = config.base_url.ok_or_else(|| {
+                LlmError::NotConfigured(
+                    "AI_MEMORY_LLM_BASE_URL (or AZURE_OPENAI_ENDPOINT) required for azure-openai"
+                        .into(),
+                )
+            })?;
+            Ok(Arc::new(OpenAiResponsesProvider::azure(
+                base,
+                key,
+                config.model,
+            )?))
+        }
+        ProviderChoice::Devin => {
+            let auth = config.auth.require_devin_auth()?;
+            let session = if let Some(tok) = auth.env_token {
+                tok
+            } else {
+                DevinToken::load(&auth.token_file)?
+                    .ok_or_else(|| {
+                        LlmError::NotConfigured(
+                            "devin token missing; run `ai-memory auth login devin` or set DEVIN_API_KEY"
+                                .into(),
+                        )
+                    })?
+                    .token
+            };
+            Ok(Arc::new(DevinProvider::new(session, config.model)?))
         }
     }
 }
@@ -292,6 +382,7 @@ mod tests {
             auth: ProviderAuth::required_api_key_from_env("OPENAI_API_KEY", None),
             base_url: None,
             compat_strict: false,
+            name_override: None,
         };
 
         let err = match build_provider(cfg) {

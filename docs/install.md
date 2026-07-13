@@ -817,6 +817,12 @@ If you set only the provider, ai-memory picks a sensible default:
 | `AI_MEMORY_LLM_PROVIDER=copilot` | `gpt-5.5` | GitHub Copilot Chat backend. ai-memory stores a GitHub user token in `<data_dir>/auth.json`, exchanges it for a short-lived Copilot API token, and refreshes before expiry. |
 | `AI_MEMORY_LLM_PROVIDER=gemini` | `gemini-2.5-flash` | Google's hosted option with a generous free tier. ai-memory disables Gemini 2.5 Flash's default dynamic thinking so hidden thought tokens do not truncate strict JSON. Set `GEMINI_API_KEY` (or `GOOGLE_API_KEY`). |
 | `AI_MEMORY_LLM_PROVIDER=opencode` | `claude-sonnet-4-6` | [OpenCode Zen/Go](https://opencode.ai) cloud API — OpenAI-compatible endpoint at `opencode.ai/zen/go/v1`. Set `OPENCODE_API_KEY` (key from `opencode.ai/auth`). Alias: `opencode-zen`. |
+| `AI_MEMORY_LLM_PROVIDER=openrouter` | `openai/gpt-4o-mini` | Named openai-compat preset. Set `OPENROUTER_API_KEY` (or generic `LLM_API_KEY`). Other presets: `groq`, `mistral`, `deepseek`, `together`, `fireworks`, `ollama`, `lm-studio`, … — see [Named openai-compat presets](#named-openai-compat-presets). |
+| `AI_MEMORY_LLM_PROVIDER=openai-responses` | `gpt-4o-mini` | OpenAI Platform **Responses** API (`/v1/responses`). Set `OPENAI_API_KEY`. |
+| `AI_MEMORY_LLM_PROVIDER=xai` (alias `grok`) | `grok-3-mini` | xAI Responses API. Set `XAI_API_KEY`. |
+| `AI_MEMORY_LLM_PROVIDER=xai-oauth` (alias `supergrok`) | `grok-3-mini` | SuperGrok subscription. `ai-memory auth login xai-oauth` once. |
+| `AI_MEMORY_LLM_PROVIDER=azure-openai` | *(required)* | Azure OpenAI Responses. Set `AZURE_OPENAI_API_KEY` + `AI_MEMORY_LLM_BASE_URL` / `AZURE_OPENAI_ENDPOINT` + deployment name as model. |
+| `AI_MEMORY_LLM_PROVIDER=devin` | `swe-1-6` | Devin Cascade (Connect-RPC). `DEVIN_API_KEY` or `ai-memory auth login devin`. |
 | `AI_MEMORY_EMBEDDING_PROVIDER=openai` | `text-embedding-3-small` (1536-dim) | 5× cheaper than `-3-large` with marginal recall loss. |
 | `AI_MEMORY_EMBEDDING_PROVIDER=openai` + `AI_MEMORY_EMBEDDING_BASE_URL=https://openrouter.ai/api/v1` | `openai/text-embedding-3-small` via [OpenRouter](https://openrouter.ai) | Reuses `LLM_API_KEY` or `OPENAI_API_KEY` with the OpenAI-compatible embedding client. |
 | `AI_MEMORY_EMBEDDING_PROVIDER=voyage` | `voyage-3` (1024-dim) | Voyage's current general-purpose recommendation. |
@@ -949,6 +955,22 @@ OAuth app.
 
 ### Self-hosted LLMs (Ollama / vLLM / LM Studio / OpenRouter)
 
+Preferred: use a **named preset** so you do not hand-write `LLM_BASE_URL`:
+
+```bash
+# Local Ollama
+-e AI_MEMORY_LLM_PROVIDER=ollama
+-e AI_MEMORY_LLM_MODEL=qwen2.5-coder:14b
+
+# OpenRouter gateway
+-e AI_MEMORY_LLM_PROVIDER=openrouter
+-e OPENROUTER_API_KEY=sk-or-v1-...
+# optional model override:
+-e AI_MEMORY_LLM_MODEL=moonshotai/kimi-k2.6
+```
+
+Generic form (any OpenAI-compatible base URL):
+
 ```bash
 docker run -d --name ai-memory \
     -p 49374:49374 \
@@ -960,15 +982,8 @@ docker run -d --name ai-memory \
     akitaonrails/ai-memory:latest
 ```
 
-There is no safe default model for `openai-compat`; the env var is
-required. For OpenRouter (Kimi, DeepSeek, etc.):
-
-```bash
--e AI_MEMORY_LLM_PROVIDER=openai-compat
--e AI_MEMORY_LLM_BASE_URL=https://openrouter.ai/api/v1
--e AI_MEMORY_LLM_MODEL=moonshotai/kimi-k2.6
--e LLM_API_KEY=sk-or-v1-...
-```
+There is no safe default model for bare `openai-compat`; `AI_MEMORY_LLM_MODEL`
+is required. Named presets supply a default model (overridable).
 
 Modern Ollama, vLLM, LM Studio, llama.cpp, and gateway endpoints may honour
 OpenAI-style `response_format=json_schema`. If the tolerant default parser fails
@@ -981,6 +996,41 @@ try strict compat mode:
 
 Strict mode is opt-in. ai-memory sends the schema-constrained request first and
 falls back to the tolerant parser only when that raw strict call fails.
+
+### Named openai-compat presets
+
+These values of `AI_MEMORY_LLM_PROVIDER` map to a fixed Chat Completions base
+URL and API-key env var, then reuse the same `openai-compat` client (no
+LiteLLM). Override the URL with `AI_MEMORY_LLM_BASE_URL` / `LLM_BASE_URL` when
+needed. Hosted presets also accept generic `LLM_API_KEY` if the brand-specific
+env var is unset.
+
+| Provider | Env key (preferred) | Default base URL |
+|---|---|---|
+| `openrouter` | `OPENROUTER_API_KEY` | `https://openrouter.ai/api/v1` |
+| `groq` | `GROQ_API_KEY` | `https://api.groq.com/openai/v1` |
+| `mistral` | `MISTRAL_API_KEY` | `https://api.mistral.ai/v1` |
+| `deepseek` | `DEEPSEEK_API_KEY` | `https://api.deepseek.com` |
+| `together` | `TOGETHER_API_KEY` | `https://api.together.xyz/v1` |
+| `fireworks` | `FIREWORKS_API_KEY` | `https://api.fireworks.ai/inference/v1` |
+| `cerebras` | `CEREBRAS_API_KEY` | `https://api.cerebras.ai/v1` |
+| `huggingface` / `hf` | `HF_TOKEN` | `https://router.huggingface.co/v1` |
+| `nvidia` | `NVIDIA_API_KEY` | `https://integrate.api.nvidia.com/v1` |
+| `moonshot` / `kimi` | `MOONSHOT_API_KEY` | `https://api.moonshot.ai/v1` |
+| `minimax-code` / `minimax` | `MINIMAX_API_KEY` | `https://api.minimax.io/v1` |
+| `ollama` | optional `OLLAMA_API_KEY` | `http://127.0.0.1:11434/v1` |
+| `lm-studio` | optional | `http://127.0.0.1:1234/v1` |
+| `vllm` | optional | `http://127.0.0.1:8000/v1` |
+| `llama-cpp` | optional | `http://127.0.0.1:8080/v1` |
+
+Additional coding-plan / gateway presets (`kimi-code`, `novita`, `venice`,
+`nanogpt`, `baseten`, `kilo`, `alibaba-coding-plan`, `zhipu-coding-plan`,
+`qianfan`, `qwen-portal`, `synthetic`, `wafer-serverless`, `xiaomi`, …) live
+in `ai_memory_llm::presets`. Smoke-test any of them with:
+
+```bash
+ai-memory llm-test --provider openrouter --model openai/gpt-4o-mini --prompt ping
+```
 
 ---
 

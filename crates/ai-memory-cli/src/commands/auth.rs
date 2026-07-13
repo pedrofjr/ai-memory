@@ -3,15 +3,19 @@
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use ai_memory_llm::{
-    CODEX_CLIENT_ID, CopilotToken, DeviceAuthorizationResponse, GITHUB_ACCESS_TOKEN_URL,
-    GITHUB_COPILOT_CLIENT_ID, GITHUB_DEVICE_CODE_URL, OIDC_DEFAULT_SCOPE, OPENAI_OAUTH_TOKEN_URL,
-    OidcDiscovery, OidcToken, OidcTokenResponse, OpenAiOAuthToken, OpenAiOAuthTokenResponse,
-    PollOutcome, discover, poll_token_once, request_device_code,
+    CODEX_CLIENT_ID, CopilotToken, DEVIN_OAUTH_CALLBACK_PATH, DEVIN_OAUTH_CALLBACK_PORT,
+    DeviceAuthorizationResponse, DevinToken, GITHUB_ACCESS_TOKEN_URL, GITHUB_COPILOT_CLIENT_ID,
+    GITHUB_DEVICE_CODE_URL, OIDC_DEFAULT_SCOPE, OPENAI_OAUTH_TOKEN_URL, OidcDiscovery, OidcToken,
+    OidcTokenResponse, OpenAiOAuthToken, OpenAiOAuthTokenResponse, PollOutcome,
+    XAI_OAUTH_REDIRECT_PATH, XAI_OAUTH_REDIRECT_PORT, XaiOAuthToken, build_devin_authorize_url,
+    build_xai_authorize_url, discover, discover_xai, exchange_devin_token, exchange_xai_code,
+    generate_pkce, poll_token_once, request_device_code,
 };
 use anyhow::{Context, Result, anyhow, bail};
 use secrecy::ExposeSecret as _;
 use serde::{Deserialize, Serialize};
 use tokio::time::sleep;
+use uuid::Uuid;
 
 use crate::cli::{AuthArgs, AuthCommand, AuthProviderChoice};
 use crate::config::Config;
@@ -56,11 +60,31 @@ pub async fn run(config: &Config, args: AuthArgs) -> Result<()> {
                     .context("--client-id is required for `auth login oidc-device`")?;
                 login_oidc_device(config, &issuer, &client_id, args.timeout_secs).await
             }
+            AuthProviderChoice::XaiOauth => {
+                if args.github_token.is_some() || args.client_id.is_some() || args.issuer.is_some()
+                {
+                    bail!(
+                        "--github-token / --client-id / --issuer do not apply to `auth login xai-oauth`"
+                    );
+                }
+                login_xai_oauth(config, args.timeout_secs).await
+            }
+            AuthProviderChoice::Devin => {
+                if args.github_token.is_some() || args.client_id.is_some() || args.issuer.is_some()
+                {
+                    bail!(
+                        "--github-token / --client-id / --issuer do not apply to `auth login devin`"
+                    );
+                }
+                login_devin(config, args.timeout_secs).await
+            }
         },
         AuthCommand::Logout(args) => match args.provider {
             AuthProviderChoice::OpenaiOauth => logout_openai_oauth(config),
             AuthProviderChoice::Copilot => logout_copilot(config),
             AuthProviderChoice::OidcDevice => logout_oidc_device(config),
+            AuthProviderChoice::XaiOauth => logout_xai_oauth(config),
+            AuthProviderChoice::Devin => logout_devin(config),
         },
         AuthCommand::Status(_) => status(config),
     }
@@ -292,7 +316,221 @@ fn status(config: &Config) -> Result<()> {
             println!("token file: {}", oidc_path.display());
         }
     }
+
+    let xai_path = config.auth_token_path();
+    match XaiOAuthToken::load(&xai_path).map_err(anyhow::Error::from)? {
+        Some(token) => {
+            println!("xai-oauth: logged in");
+            println!("expires in: {}", format_duration_until(token.expires_at_ms));
+            println!("token file: {}", xai_path.display());
+        }
+        None => {
+            println!("xai-oauth: not logged in");
+            println!("token file: {}", xai_path.display());
+        }
+    }
+
+    match DevinToken::load(&xai_path).map_err(anyhow::Error::from)? {
+        Some(_) => {
+            println!("devin: logged in");
+            println!("token file: {}", xai_path.display());
+        }
+        None => {
+            println!("devin: not logged in");
+            println!("token file: {}", xai_path.display());
+        }
+    }
     Ok(())
+}
+
+async fn login_xai_oauth(config: &Config, timeout_secs: u64) -> Result<()> {
+    let client = auth_http_client()?;
+    let discovery = discover_xai(&client).await.map_err(anyhow::Error::from)?;
+    let (verifier, challenge) = generate_pkce();
+    let state = Uuid::new_v4().simple().to_string();
+    let nonce = Uuid::new_v4().simple().to_string();
+    let redirect_uri =
+        format!("http://127.0.0.1:{XAI_OAUTH_REDIRECT_PORT}{XAI_OAUTH_REDIRECT_PATH}");
+    let auth_url = build_xai_authorize_url(&discovery, &redirect_uri, &challenge, &state, &nonce);
+    println!("Open this URL: {auth_url}");
+    open_browser(&auth_url);
+    println!("Waiting for authorization on {redirect_uri} ...");
+    let code = wait_for_oauth_code(
+        XAI_OAUTH_REDIRECT_PORT,
+        XAI_OAUTH_REDIRECT_PATH,
+        &state,
+        Duration::from_secs(timeout_secs),
+    )
+    .await?;
+    let token = exchange_xai_code(&client, &discovery, &code, &verifier, &redirect_uri)
+        .await
+        .map_err(anyhow::Error::from)?;
+    let path = config.auth_token_path();
+    token.save(&path).map_err(anyhow::Error::from)?;
+    println!("xai-oauth: logged in");
+    println!("token file: {}", path.display());
+    Ok(())
+}
+
+fn logout_xai_oauth(config: &Config) -> Result<()> {
+    let path = config.auth_token_path();
+    XaiOAuthToken::remove(&path).map_err(anyhow::Error::from)?;
+    println!("xai-oauth: logged out");
+    println!("token file: {}", path.display());
+    Ok(())
+}
+
+async fn login_devin(config: &Config, timeout_secs: u64) -> Result<()> {
+    let client = auth_http_client()?;
+    let (verifier, challenge) = generate_pkce();
+    let state = Uuid::new_v4().simple().to_string();
+    let redirect_uri =
+        format!("http://127.0.0.1:{DEVIN_OAUTH_CALLBACK_PORT}{DEVIN_OAUTH_CALLBACK_PATH}");
+    let auth_url = build_devin_authorize_url(&redirect_uri, &state, &challenge);
+    println!("Open this URL: {auth_url}");
+    open_browser(&auth_url);
+    println!("Waiting for authorization on {redirect_uri} ...");
+    let code = wait_for_oauth_code(
+        DEVIN_OAUTH_CALLBACK_PORT,
+        DEVIN_OAUTH_CALLBACK_PATH,
+        &state,
+        Duration::from_secs(timeout_secs),
+    )
+    .await?;
+    let token = exchange_devin_token(&client, &code, &verifier)
+        .await
+        .map_err(anyhow::Error::from)?;
+    let path = config.auth_token_path();
+    token.save(&path).map_err(anyhow::Error::from)?;
+    println!("devin: logged in");
+    println!("token file: {}", path.display());
+    Ok(())
+}
+
+fn logout_devin(config: &Config) -> Result<()> {
+    let path = config.auth_token_path();
+    DevinToken::remove(&path).map_err(anyhow::Error::from)?;
+    println!("devin: logged out");
+    println!("token file: {}", path.display());
+    Ok(())
+}
+
+fn open_browser(url: &str) {
+    let _ = std::process::Command::new(if cfg!(windows) {
+        "cmd"
+    } else if cfg!(target_os = "macos") {
+        "open"
+    } else {
+        "xdg-open"
+    })
+    .args(if cfg!(windows) {
+        vec!["/C", "start", "", url]
+    } else {
+        vec![url]
+    })
+    .spawn();
+}
+
+/// Minimal loopback OAuth callback: bind `127.0.0.1:port`, wait for GET path
+/// with `?code=&state=`, validate state, return code.
+async fn wait_for_oauth_code(
+    port: u16,
+    path: &str,
+    expected_state: &str,
+    timeout: Duration,
+) -> Result<String> {
+    use std::io::{Read as _, Write as _};
+    use std::net::TcpListener;
+
+    let listener = TcpListener::bind(("127.0.0.1", port))
+        .with_context(|| format!("bind 127.0.0.1:{port} for OAuth callback"))?;
+    listener
+        .set_nonblocking(true)
+        .context("set oauth callback listener nonblocking")?;
+    let expected_state = expected_state.to_string();
+    let path = path.to_string();
+    let started = Instant::now();
+
+    loop {
+        if started.elapsed() >= timeout {
+            bail!("timed out waiting for OAuth callback on port {port}");
+        }
+        match listener.accept() {
+            Ok((mut stream, _)) => {
+                let mut buf = [0u8; 4096];
+                let n = stream.read(&mut buf).unwrap_or(0);
+                let req = String::from_utf8_lossy(&buf[..n]);
+                let first = req.lines().next().unwrap_or("");
+                // GET /callback?code=...&state=... HTTP/1.1
+                let target = first.split_whitespace().nth(1).unwrap_or("");
+                let (req_path, query) = target.split_once('?').unwrap_or((target, ""));
+                let ok_path = req_path == path || req_path.ends_with(path.as_str());
+                let mut code = None;
+                let mut state = None;
+                for pair in query.split('&') {
+                    if let Some((k, v)) = pair.split_once('=') {
+                        match k {
+                            "code" => code = Some(urlencoding_decode(v)),
+                            "state" => state = Some(urlencoding_decode(v)),
+                            _ => {}
+                        }
+                    }
+                }
+                let success =
+                    ok_path && code.is_some() && state.as_deref() == Some(expected_state.as_str());
+                let body = if success {
+                    "<html><body><h1>Login successful</h1><p>You can close this tab.</p></body></html>"
+                } else {
+                    "<html><body><h1>Login failed</h1><p>Invalid callback.</p></body></html>"
+                };
+                let status = if success { "200 OK" } else { "400 Bad Request" };
+                let _ = write!(
+                    stream,
+                    "HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                if let (Some(code), Some(state)) = (code, state)
+                    && state == expected_state
+                {
+                    return Ok(code);
+                }
+                bail!("OAuth callback received invalid state or missing code");
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                sleep(Duration::from_millis(100)).await;
+            }
+            Err(e) => return Err(e).context("accept oauth callback"),
+        }
+    }
+}
+
+fn urlencoding_decode(s: &str) -> String {
+    let mut out = String::new();
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'+' => {
+                out.push(' ');
+                i += 1;
+            }
+            b'%' if i + 2 < bytes.len() => {
+                let hex = &s[i + 1..i + 3];
+                if let Ok(v) = u8::from_str_radix(hex, 16) {
+                    out.push(v as char);
+                    i += 3;
+                } else {
+                    out.push('%');
+                    i += 1;
+                }
+            }
+            b => {
+                out.push(b as char);
+                i += 1;
+            }
+        }
+    }
+    out
 }
 
 async fn run_copilot_device_flow(client_id: &str, timeout_secs: u64) -> Result<String> {

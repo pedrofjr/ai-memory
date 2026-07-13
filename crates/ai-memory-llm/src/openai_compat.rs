@@ -98,6 +98,17 @@ impl OpenAiCompatProvider {
         self.strict = strict;
         self
     }
+
+    /// Override the provider name reported by [`LlmProvider::name`].
+    ///
+    /// Used by named OpenAI-compatible presets (`openrouter`, `groq`, …)
+    /// so health logs and auto-improve attribution show the brand name
+    /// instead of the generic `openai-compat` tag.
+    #[must_use]
+    pub fn with_name(mut self, name: &'static str) -> Self {
+        self.name_tag = name;
+        self
+    }
 }
 
 #[async_trait]

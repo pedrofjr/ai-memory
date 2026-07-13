@@ -6,11 +6,13 @@
 //! guard read `process.env` while the rest of the codebase used
 //! `getMergedEnv()`, masking the bug for weeks).
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use ai_memory_llm::{
-    AuthRequirement, EmbedderChoice, EmbedderConfig, LlmError, LlmResult, OPENCODE_DEFAULT_MODEL,
-    ProviderAuth, ProviderChoice, ProviderConfig,
+    AuthRequirement, CompatPreset, DEVIN_DEFAULT_MODEL, EmbedderChoice, EmbedderConfig, LlmError,
+    LlmResult, OPENCODE_DEFAULT_MODEL, ProviderAuth, ProviderChoice, ProviderConfig,
+    compat_preset_names_csv, lookup_compat_preset, preset_api_key_env_vars,
 };
 use anyhow::{Context, Result};
 use figment::{
@@ -74,7 +76,9 @@ pub struct Config {
     pub home_dir: Option<String>,
     /// Per-subsystem log filter (overridable by `RUST_LOG`).
     pub log_level: String,
-    /// Optional LLM provider (`anthropic`, `openai`, `gemini`, `openai-compat`, `openai-oauth`, `copilot`).
+    /// Optional LLM provider (`anthropic`, `openai`, `gemini`, `openai-compat`,
+    /// `openai-oauth`, `copilot`, `opencode`, or a named openai-compat preset
+    /// such as `openrouter` / `groq` / `ollama` — see `ai_memory_llm::presets`).
     pub llm_provider: Option<String>,
     /// Optional LLM model override.
     pub llm_model: Option<String>,
@@ -202,10 +206,29 @@ pub struct RuntimeEnv {
     copilot_client_id: Option<String>,
     voyage_api_key: Option<SecretString>,
     opencode_api_key: Option<SecretString>,
+    xai_api_key: Option<SecretString>,
+    azure_openai_api_key: Option<SecretString>,
+    azure_openai_endpoint: Option<String>,
+    devin_api_key: Option<SecretString>,
+    /// API keys for named openai-compat presets, captured once at load
+    /// (keyed by env var name, e.g. `OPENROUTER_API_KEY`).
+    preset_api_keys: HashMap<String, SecretString>,
 }
 
 impl RuntimeEnv {
     fn from_process() -> Self {
+        let mut preset_api_keys = HashMap::new();
+        for env_var in preset_api_key_env_vars() {
+            if let Some(key) = env_secret(env_var) {
+                preset_api_keys.insert(env_var.to_string(), key);
+            }
+        }
+        // Hugging Face also documents HUGGING_FACE_HUB_TOKEN.
+        if !preset_api_keys.contains_key("HF_TOKEN")
+            && let Some(key) = env_secret("HUGGING_FACE_HUB_TOKEN")
+        {
+            preset_api_keys.insert("HF_TOKEN".into(), key);
+        }
         Self {
             data_dir: env_path("AI_MEMORY_DATA_DIR"),
             home_dir: env_string("AI_MEMORY_HOME").or_else(|| env_string("HOME")),
@@ -231,7 +254,19 @@ impl RuntimeEnv {
             copilot_client_id: env_string("AI_MEMORY_COPILOT_CLIENT_ID"),
             voyage_api_key: env_secret("VOYAGE_API_KEY"),
             opencode_api_key: env_secret("OPENCODE_API_KEY"),
+            xai_api_key: env_secret("XAI_API_KEY"),
+            azure_openai_api_key: env_secret("AZURE_OPENAI_API_KEY"),
+            azure_openai_endpoint: env_string("AZURE_OPENAI_ENDPOINT")
+                .or_else(|| env_string("AZURE_OPENAI_BASE_URL")),
+            devin_api_key: env_secret("DEVIN_API_KEY"),
+            preset_api_keys,
         }
+    }
+
+    /// Look up a captured preset API key by its primary env var name.
+    #[must_use]
+    pub fn preset_api_key(&self, env_var: &str) -> Option<SecretString> {
+        self.preset_api_keys.get(env_var).cloned()
     }
 
     /// Host cwd forwarded by the docker wrapper, if present.
@@ -252,6 +287,19 @@ impl RuntimeEnv {
     pub fn with_openai_api_key_for_tests(api_key: impl Into<String>) -> Self {
         Self {
             openai_api_key: Some(SecretString::from(api_key.into())),
+            ..Self::default()
+        }
+    }
+
+    #[cfg(test)]
+    pub fn with_preset_api_key_for_tests(
+        env_var: impl Into<String>,
+        api_key: impl Into<String>,
+    ) -> Self {
+        let mut preset_api_keys = HashMap::new();
+        preset_api_keys.insert(env_var.into(), SecretString::from(api_key.into()));
+        Self {
+            preset_api_keys,
             ..Self::default()
         }
     }
@@ -645,6 +693,7 @@ impl Config {
         let Some(provider_raw) = non_empty(self.llm_provider.as_deref()) else {
             return Ok(None);
         };
+        // First-class wire clients before openai-compat presets.
         let provider = match provider_raw {
             "anthropic" => ProviderChoice::Anthropic,
             "openai" => ProviderChoice::OpenAi,
@@ -653,11 +702,24 @@ impl Config {
             "openai-oauth" | "openai_oauth" => ProviderChoice::OpenAiOAuth,
             "copilot" | "github-copilot" | "github_copilot" => ProviderChoice::Copilot,
             "anthropic-oauth" | "anthropic_oauth" => ProviderChoice::AnthropicOAuth,
-            "opencode" | "opencode-zen" | "opencode_zen" => ProviderChoice::OpenCode,
+            "opencode" | "opencode-zen" | "opencode_zen" | "opencode_go" | "opencode-go" => {
+                ProviderChoice::OpenCode
+            }
+            "openai-responses" | "openai_responses" => ProviderChoice::OpenAiResponses,
+            "xai" | "grok" => ProviderChoice::Xai,
+            "xai-oauth" | "xai_oauth" | "supergrok" => ProviderChoice::XaiOauth,
+            "azure" | "azure-openai" | "azure_openai" => ProviderChoice::AzureOpenAi,
+            "devin" => ProviderChoice::Devin,
             other => {
+                if let Some(preset) = lookup_compat_preset(other) {
+                    return Ok(Some(self.compat_preset_provider_config(preset, None)?));
+                }
                 return Err(LlmError::NotConfigured(format!(
                     "AI_MEMORY_LLM_PROVIDER={other} is not one of \
-                     anthropic|openai|gemini|openai-compat|openai-oauth|copilot|anthropic-oauth|opencode"
+                     anthropic|openai|gemini|openai-compat|openai-oauth|copilot|\
+                     anthropic-oauth|opencode|openai-responses|xai|xai-oauth|\
+                     azure-openai|devin|{}",
+                    compat_preset_names_csv()
                 )));
             }
         };
@@ -666,7 +728,9 @@ impl Config {
             None => match provider {
                 ProviderChoice::Anthropic => "claude-sonnet-4-6".to_string(),
                 ProviderChoice::AnthropicOAuth => "claude-sonnet-4-6".to_string(),
-                ProviderChoice::OpenAi => "gpt-4o-mini".to_string(),
+                ProviderChoice::OpenAi | ProviderChoice::OpenAiResponses => {
+                    "gpt-4o-mini".to_string()
+                }
                 ProviderChoice::Gemini => "gemini-2.5-flash".to_string(),
                 ProviderChoice::OpenAiOAuth => "gpt-5.5".to_string(),
                 ProviderChoice::Copilot => "gpt-5.5".to_string(),
@@ -678,21 +742,135 @@ impl Config {
                     ));
                 }
                 ProviderChoice::OpenCode => OPENCODE_DEFAULT_MODEL.to_string(),
+                ProviderChoice::Xai | ProviderChoice::XaiOauth => "grok-3-mini".to_string(),
+                ProviderChoice::AzureOpenAi => {
+                    return Err(LlmError::NotConfigured(
+                        "AI_MEMORY_LLM_MODEL must be set explicitly for azure-openai \
+                         (deployment name)"
+                            .into(),
+                    ));
+                }
+                ProviderChoice::Devin => DEVIN_DEFAULT_MODEL.to_string(),
             },
+        };
+        let base_url = match provider {
+            ProviderChoice::AzureOpenAi => self
+                .llm_base_url
+                .clone()
+                .or_else(|| self.runtime_env.llm_base_url.clone())
+                .or_else(|| self.runtime_env.azure_openai_endpoint.clone()),
+            _ => self
+                .llm_base_url
+                .clone()
+                .or_else(|| self.runtime_env.llm_base_url.clone()),
         };
         Ok(Some(ProviderConfig {
             provider,
             model,
             auth: self.provider_auth(provider, None),
-            // base_url falls back to the runtime env (LLM_BASE_URL), mirroring
-            // how auth is sourced — otherwise openai-compat is only
-            // configurable via config.toml even though the key comes from env.
-            base_url: self
-                .llm_base_url
-                .clone()
-                .or_else(|| self.runtime_env.llm_base_url.clone()),
+            base_url,
             compat_strict: self.llm_compat_strict,
+            name_override: None,
         }))
+    }
+
+    /// Build a [`ProviderConfig`] for a named openai-compat preset.
+    ///
+    /// `api_key_override` is used by `llm-test --api-key`.
+    pub fn compat_preset_provider_config(
+        &self,
+        preset: &CompatPreset,
+        api_key_override: Option<SecretString>,
+    ) -> LlmResult<ProviderConfig> {
+        let model = match non_empty(self.llm_model.as_deref()) {
+            Some(s) => s.to_string(),
+            None => preset.default_model.to_string(),
+        };
+        let base_url = self
+            .llm_base_url
+            .clone()
+            .or_else(|| self.runtime_env.llm_base_url.clone())
+            .unwrap_or_else(|| preset.base_url.to_string());
+        // Prefer the preset-specific env key; fall back to LLM_API_KEY so
+        // generic gateway installs keep working with one shared secret.
+        let key = self
+            .runtime_env
+            .preset_api_key(preset.env_var)
+            .or_else(|| self.runtime_env.llm_api_key.clone());
+        let auth = if preset.require_api_key {
+            ProviderAuth::required_api_key_from_env(preset.env_var, key)
+                .with_cli_api_key_override(api_key_override)
+        } else {
+            ProviderAuth::optional_api_key_from_env(preset.env_var, key)
+                .with_cli_api_key_override(api_key_override)
+        };
+        Ok(ProviderConfig {
+            provider: ProviderChoice::OpenAiCompat,
+            model,
+            auth,
+            base_url: Some(base_url),
+            compat_strict: self.llm_compat_strict,
+            name_override: Some(preset.name),
+        })
+    }
+
+    /// Resolve `llm-test --provider <name>` into a full [`ProviderConfig`].
+    ///
+    /// Accepts native provider names and named openai-compat presets.
+    pub fn llm_test_provider_config(
+        &self,
+        provider_raw: &str,
+        model: String,
+        base_url: Option<String>,
+        api_key_override: Option<SecretString>,
+    ) -> LlmResult<ProviderConfig> {
+        if let Some(preset) = lookup_compat_preset(provider_raw) {
+            let mut cfg = self.compat_preset_provider_config(preset, api_key_override)?;
+            cfg.model = model;
+            if let Some(url) = base_url {
+                cfg.base_url = Some(url);
+            }
+            return Ok(cfg);
+        }
+        let provider = match provider_raw {
+            "anthropic" => ProviderChoice::Anthropic,
+            "openai" => ProviderChoice::OpenAi,
+            "gemini" | "google" => ProviderChoice::Gemini,
+            "openai-compat" | "openai_compat" => ProviderChoice::OpenAiCompat,
+            "openai-oauth" | "openai_oauth" => ProviderChoice::OpenAiOAuth,
+            "copilot" | "github-copilot" | "github_copilot" => ProviderChoice::Copilot,
+            "anthropic-oauth" | "anthropic_oauth" => ProviderChoice::AnthropicOAuth,
+            "opencode" | "opencode-zen" | "opencode_zen" | "opencode_go" | "opencode-go" => {
+                ProviderChoice::OpenCode
+            }
+            "openai-responses" | "openai_responses" => ProviderChoice::OpenAiResponses,
+            "xai" | "grok" => ProviderChoice::Xai,
+            "xai-oauth" | "xai_oauth" | "supergrok" => ProviderChoice::XaiOauth,
+            "azure" | "azure-openai" | "azure_openai" => ProviderChoice::AzureOpenAi,
+            "devin" => ProviderChoice::Devin,
+            other => {
+                return Err(LlmError::NotConfigured(format!(
+                    "unknown provider {other}; expected anthropic|openai|gemini|openai-compat|\
+                     openai-oauth|copilot|anthropic-oauth|opencode|openai-responses|xai|\
+                     xai-oauth|azure-openai|devin|{}",
+                    compat_preset_names_csv()
+                )));
+            }
+        };
+        let base_url = base_url.or_else(|| match provider {
+            ProviderChoice::AzureOpenAi => self
+                .llm_test_base_url()
+                .or_else(|| self.runtime_env.azure_openai_endpoint.clone()),
+            _ => self.llm_test_base_url(),
+        });
+        Ok(ProviderConfig {
+            provider,
+            model,
+            auth: self.provider_auth(provider, api_key_override),
+            base_url,
+            compat_strict: self.llm_compat_strict,
+            name_override: None,
+        })
     }
 
     /// OpenAI-compatible embedding key. Direct OpenAI keeps requiring
@@ -768,13 +946,27 @@ impl Config {
     pub fn provider_api_key(&self, provider: ProviderChoice) -> Option<SecretString> {
         match provider {
             ProviderChoice::Anthropic => self.runtime_env.anthropic_api_key.clone(),
-            ProviderChoice::OpenAi => self.runtime_env.openai_api_key.clone(),
+            ProviderChoice::OpenAi | ProviderChoice::OpenAiResponses => {
+                self.runtime_env.openai_api_key.clone()
+            }
             ProviderChoice::Gemini => self.runtime_env.gemini_api_key.clone(),
             ProviderChoice::OpenAiCompat => self.runtime_env.llm_api_key.clone(),
-            ProviderChoice::OpenAiOAuth => None,
-            ProviderChoice::Copilot => None,
-            ProviderChoice::AnthropicOAuth => None,
+            ProviderChoice::OpenAiOAuth
+            | ProviderChoice::Copilot
+            | ProviderChoice::AnthropicOAuth
+            | ProviderChoice::XaiOauth
+            | ProviderChoice::Devin => None,
             ProviderChoice::OpenCode => self.runtime_env.opencode_api_key.clone(),
+            ProviderChoice::Xai => self
+                .runtime_env
+                .xai_api_key
+                .clone()
+                .or_else(|| self.runtime_env.llm_api_key.clone()),
+            ProviderChoice::AzureOpenAi => self
+                .runtime_env
+                .azure_openai_api_key
+                .clone()
+                .or_else(|| self.runtime_env.llm_api_key.clone()),
         }
     }
 
@@ -847,6 +1039,13 @@ impl Config {
             ),
             AuthRequirement::AnthropicOAuthToken => {
                 ProviderAuth::anthropic_oauth_token(self.runtime_env.anthropic_oauth_token.clone())
+            }
+            AuthRequirement::XaiOAuthToken => {
+                ProviderAuth::xai_oauth_token_file(self.auth_token_path())
+            }
+            AuthRequirement::DevinToken => {
+                let env_token = api_key_override.or_else(|| self.runtime_env.devin_api_key.clone());
+                ProviderAuth::devin(self.auth_token_path(), env_token)
             }
         }
     }
@@ -1347,7 +1546,7 @@ mod tests {
 
     #[test]
     fn opencode_provider_resolves_choice_default_model_and_api_key() {
-        for spelling in ["opencode", "opencode-zen", "opencode_zen"] {
+        for spelling in ["opencode", "opencode-zen", "opencode_zen", "opencode-go"] {
             let cfg = Config {
                 llm_provider: Some(spelling.into()),
                 runtime_env: RuntimeEnv {
@@ -1373,6 +1572,102 @@ mod tests {
                 "{spelling}"
             );
         }
+    }
+
+    #[test]
+    fn openrouter_preset_fills_base_url_auth_and_default_model() {
+        let cfg = Config {
+            llm_provider: Some("openrouter".into()),
+            runtime_env: RuntimeEnv::with_preset_api_key_for_tests(
+                "OPENROUTER_API_KEY",
+                "sk-or-test",
+            ),
+            ..Config::default()
+        };
+
+        let provider = cfg.llm_provider_config().unwrap().unwrap();
+        assert_eq!(provider.provider, ProviderChoice::OpenAiCompat);
+        assert_eq!(provider.name_override, Some("openrouter"));
+        assert_eq!(provider.model, "openai/gpt-4o-mini");
+        assert_eq!(
+            provider.base_url.as_deref(),
+            Some("https://openrouter.ai/api/v1")
+        );
+        assert_eq!(
+            provider.auth.requirement(),
+            AuthRequirement::RequiredApiKey {
+                env_var: "OPENROUTER_API_KEY"
+            }
+        );
+        assert_eq!(
+            provider.auth.require_api_key().unwrap().expose_secret(),
+            "sk-or-test"
+        );
+    }
+
+    #[test]
+    fn ollama_preset_is_optional_key_with_local_default_url() {
+        let cfg = Config {
+            llm_provider: Some("ollama".into()),
+            llm_model: Some("qwen3:32b".into()),
+            ..Config::default()
+        };
+
+        let provider = cfg.llm_provider_config().unwrap().unwrap();
+        assert_eq!(provider.provider, ProviderChoice::OpenAiCompat);
+        assert_eq!(provider.name_override, Some("ollama"));
+        assert_eq!(provider.model, "qwen3:32b");
+        assert_eq!(
+            provider.base_url.as_deref(),
+            Some("http://127.0.0.1:11434/v1")
+        );
+        assert_eq!(
+            provider.auth.requirement(),
+            AuthRequirement::OptionalApiKey {
+                env_var: "OLLAMA_API_KEY"
+            }
+        );
+        assert!(provider.auth.optional_api_key().is_none());
+    }
+
+    #[test]
+    fn preset_base_url_can_be_overridden() {
+        let cfg = Config {
+            llm_provider: Some("groq".into()),
+            llm_base_url: Some("http://proxy.local/v1".into()),
+            runtime_env: RuntimeEnv::with_preset_api_key_for_tests("GROQ_API_KEY", "gsk-test"),
+            ..Config::default()
+        };
+
+        let provider = cfg.llm_provider_config().unwrap().unwrap();
+        assert_eq!(provider.base_url.as_deref(), Some("http://proxy.local/v1"));
+        assert_eq!(provider.name_override, Some("groq"));
+    }
+
+    #[test]
+    fn llm_test_provider_config_accepts_preset_and_native() {
+        let cfg = Config {
+            runtime_env: RuntimeEnv::with_preset_api_key_for_tests(
+                "OPENROUTER_API_KEY",
+                "sk-or-test",
+            ),
+            ..Config::default()
+        };
+
+        let or = cfg
+            .llm_test_provider_config("openrouter", "openai/gpt-4o-mini".into(), None, None)
+            .unwrap();
+        assert_eq!(or.name_override, Some("openrouter"));
+
+        let cfg_openai = Config {
+            runtime_env: RuntimeEnv::with_openai_api_key_for_tests("sk-openai"),
+            ..Config::default()
+        };
+        let openai = cfg_openai
+            .llm_test_provider_config("openai", "gpt-4o-mini".into(), None, None)
+            .unwrap();
+        assert_eq!(openai.provider, ProviderChoice::OpenAi);
+        assert!(openai.name_override.is_none());
     }
 
     #[test]

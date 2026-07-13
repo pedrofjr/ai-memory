@@ -1,10 +1,10 @@
 //! `ai-memory llm-test` — smoke test an LLM provider end-to-end.
 
-use ai_memory_llm::{ChatRequest, ProviderChoice, ProviderConfig, build_provider};
+use ai_memory_llm::{ChatRequest, build_provider};
 use anyhow::{Context, Result};
 use tracing::info;
 
-use crate::cli::{LlmProviderChoice, LlmTestArgs};
+use crate::cli::LlmTestArgs;
 use crate::config::Config;
 
 /// Run the `llm-test` subcommand.
@@ -13,18 +13,13 @@ use crate::config::Config;
 /// Returns an error if the provider cannot be constructed, the env
 /// lacks the required keys, or the HTTP call fails.
 pub async fn run(config: &Config, args: LlmTestArgs) -> Result<()> {
-    let provider = ProviderChoice::from(args.provider);
     let api_key_override = args
         .api_key
         .filter(|s| !s.is_empty())
         .map(secrecy::SecretString::from);
-    let provider_config = ProviderConfig {
-        provider,
-        model: args.model,
-        auth: config.provider_auth(provider, api_key_override),
-        base_url: args.base_url.or_else(|| config.llm_test_base_url()),
-        compat_strict: config.llm_compat_strict,
-    };
+    let provider_config = config
+        .llm_test_provider_config(&args.provider, args.model, args.base_url, api_key_override)
+        .context("resolving LLM provider")?;
     let client = build_provider(provider_config).context("building LLM provider")?;
     info!(
         provider = client.name(),
@@ -45,32 +40,4 @@ pub async fn run(config: &Config, args: LlmTestArgs) -> Result<()> {
     }
     println!("{}", resp.text);
     Ok(())
-}
-
-impl From<LlmProviderChoice> for ProviderChoice {
-    fn from(value: LlmProviderChoice) -> Self {
-        match value {
-            LlmProviderChoice::Anthropic => Self::Anthropic,
-            LlmProviderChoice::AnthropicOauth => Self::AnthropicOAuth,
-            LlmProviderChoice::Openai => Self::OpenAi,
-            LlmProviderChoice::Gemini => Self::Gemini,
-            LlmProviderChoice::OpenaiCompat => Self::OpenAiCompat,
-            LlmProviderChoice::OpenaiOauth => Self::OpenAiOAuth,
-            LlmProviderChoice::Copilot => Self::Copilot,
-            LlmProviderChoice::Opencode => Self::OpenCode,
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn anthropic_oauth_choice_maps_to_runtime_provider() {
-        assert_eq!(
-            ProviderChoice::from(LlmProviderChoice::AnthropicOauth),
-            ProviderChoice::AnthropicOAuth
-        );
-    }
 }

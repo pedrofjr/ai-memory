@@ -68,6 +68,7 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]
@@ -158,6 +159,8 @@ dependencies = [
  "anyhow",
  "async-trait",
  "base64",
+ "flate2",
+ "getrandom 0.3.4",
  "jiff",
  "regex",
  "reqwest",
@@ -165,6 +168,7 @@ dependencies = [
  "secrecy",
  "serde",
  "serde_json",
+ "sha2",
  "tempfile",
  "thiserror 2.0.18",
  "tokio",

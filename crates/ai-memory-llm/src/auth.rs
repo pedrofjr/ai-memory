@@ -47,6 +47,10 @@ pub enum AuthRequirement {
     /// Provider requires an Anthropic OAuth subscription token
     /// (from `claude setup-token`).
     AnthropicOAuthToken,
+    /// Provider requires an xAI SuperGrok OAuth token file.
+    XaiOAuthToken,
+    /// Provider requires a Devin session token (env or auth file).
+    DevinToken,
 }
 
 /// Resolved Copilot auth inputs.
@@ -62,6 +66,15 @@ pub struct CopilotAuth {
     pub api_base_url: Option<String>,
 }
 
+/// Resolved Devin session-token inputs.
+#[derive(Debug, Clone)]
+pub struct DevinAuth {
+    /// Shared auth file under ai-memory's data dir.
+    pub token_file: PathBuf,
+    /// Session token from `DEVIN_API_KEY`, if present.
+    pub env_token: Option<SecretString>,
+}
+
 /// Materialized provider credential.
 #[derive(Debug, Clone)]
 pub enum Credential {
@@ -73,6 +86,10 @@ pub enum Credential {
     Copilot(CopilotAuth),
     /// Anthropic OAuth subscription token from `claude setup-token`.
     AnthropicOAuthToken(SecretString),
+    /// Path to the shared auth file holding the xAI OAuth entry.
+    XaiOAuthTokenFile(PathBuf),
+    /// Devin session token inputs.
+    Devin(DevinAuth),
 }
 
 /// Resolved authentication for one provider instance.
@@ -151,6 +168,36 @@ impl ProviderAuth {
         }
     }
 
+    /// Resolve xAI SuperGrok OAuth from a shared token file.
+    #[must_use]
+    pub fn xai_oauth_token_file(path: impl Into<PathBuf>) -> Self {
+        Self {
+            requirement: AuthRequirement::XaiOAuthToken,
+            credential: Some(Credential::XaiOAuthTokenFile(path.into())),
+            source: CredentialSource::TokenFile,
+        }
+    }
+
+    /// Resolve Devin session token from env and/or shared auth file.
+    #[must_use]
+    pub fn devin(token_file: impl Into<PathBuf>, env_token: Option<SecretString>) -> Self {
+        let has_env = env_token.is_some();
+        Self {
+            requirement: AuthRequirement::DevinToken,
+            credential: Some(Credential::Devin(DevinAuth {
+                token_file: token_file.into(),
+                env_token,
+            })),
+            source: if has_env {
+                CredentialSource::Environment {
+                    name: "DEVIN_API_KEY",
+                }
+            } else {
+                CredentialSource::TokenFile
+            },
+        }
+    }
+
     fn from_api_key(
         requirement: AuthRequirement,
         key: Option<SecretString>,
@@ -198,14 +245,17 @@ impl ProviderAuth {
     pub fn require_api_key(&self) -> LlmResult<SecretString> {
         match (&self.requirement, &self.credential) {
             (_, Some(Credential::ApiKey(key))) => Ok(key.clone()),
-            (_, Some(Credential::OpenAiOAuthTokenFile(_))) => Err(LlmError::NotConfigured(
-                "API key credential expected, got openai-oauth token file".into(),
-            )),
-            (_, Some(Credential::Copilot(_))) => Err(LlmError::NotConfigured(
-                "API key credential expected, got copilot auth".into(),
-            )),
-            (_, Some(Credential::AnthropicOAuthToken(_))) => Err(LlmError::NotConfigured(
-                "API key credential expected, got anthropic-oauth token".into(),
+            (
+                _,
+                Some(
+                    Credential::OpenAiOAuthTokenFile(_)
+                    | Credential::Copilot(_)
+                    | Credential::AnthropicOAuthToken(_)
+                    | Credential::XaiOAuthTokenFile(_)
+                    | Credential::Devin(_),
+                ),
+            ) => Err(LlmError::NotConfigured(
+                "API key credential expected, got non-API-key auth".into(),
             )),
             (AuthRequirement::RequiredApiKey { env_var }, None) => {
                 Err(LlmError::NotConfigured((*env_var).into()))
@@ -225,6 +275,12 @@ impl ProviderAuth {
                  ANTHROPIC_OAUTH_TOKEN (or CLAUDE_CODE_OAUTH_TOKEN)"
                     .into(),
             )),
+            (AuthRequirement::XaiOAuthToken, None) => Err(LlmError::NotConfigured(
+                "xai-oauth token file missing; run `ai-memory auth login xai-oauth`".into(),
+            )),
+            (AuthRequirement::DevinToken, None) => Err(LlmError::NotConfigured(
+                "devin token missing; run `ai-memory auth login devin` or set DEVIN_API_KEY".into(),
+            )),
         }
     }
 
@@ -236,7 +292,9 @@ impl ProviderAuth {
             Some(
                 Credential::OpenAiOAuthTokenFile(_)
                 | Credential::Copilot(_)
-                | Credential::AnthropicOAuthToken(_),
+                | Credential::AnthropicOAuthToken(_)
+                | Credential::XaiOAuthTokenFile(_)
+                | Credential::Devin(_),
             )
             | None => None,
         }
@@ -296,6 +354,38 @@ impl ProviderAuth {
             )),
             _ => Err(LlmError::NotConfigured(
                 "copilot auth credential required".into(),
+            )),
+        }
+    }
+
+    /// Extract the xAI OAuth token file path.
+    ///
+    /// # Errors
+    /// Wrong credential kind or missing file path.
+    pub fn require_xai_oauth_token_file(&self) -> LlmResult<&Path> {
+        match (&self.requirement, &self.credential) {
+            (AuthRequirement::XaiOAuthToken, Some(Credential::XaiOAuthTokenFile(path))) => Ok(path),
+            (AuthRequirement::XaiOAuthToken, None) => Err(LlmError::NotConfigured(
+                "xai-oauth token file missing; run `ai-memory auth login xai-oauth`".into(),
+            )),
+            _ => Err(LlmError::NotConfigured(
+                "xai-oauth token file credential required".into(),
+            )),
+        }
+    }
+
+    /// Extract Devin auth inputs.
+    ///
+    /// # Errors
+    /// Wrong credential kind.
+    pub fn require_devin_auth(&self) -> LlmResult<DevinAuth> {
+        match (&self.requirement, &self.credential) {
+            (AuthRequirement::DevinToken, Some(Credential::Devin(auth))) => Ok(auth.clone()),
+            (AuthRequirement::DevinToken, None) => Err(LlmError::NotConfigured(
+                "devin token missing; run `ai-memory auth login devin` or set DEVIN_API_KEY".into(),
+            )),
+            _ => Err(LlmError::NotConfigured(
+                "devin auth credential required".into(),
             )),
         }
     }
@@ -410,7 +500,7 @@ mod tests {
         let auth = ProviderAuth::anthropic_oauth_token(Some(SecretString::from("tok")));
         let err = auth.require_api_key().unwrap_err();
         assert!(
-            matches!(err, LlmError::NotConfigured(ref msg) if msg.contains("anthropic-oauth token")),
+            matches!(err, LlmError::NotConfigured(ref msg) if msg.contains("non-API-key auth")),
             "unexpected error: {err}"
         );
     }
