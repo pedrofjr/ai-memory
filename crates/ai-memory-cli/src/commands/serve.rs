@@ -587,39 +587,6 @@ pub async fn run(config: &Config, args: ServeArgs) -> Result<()> {
                 } else {
                     (None, None)
                 };
-            let server_clone = server.clone();
-            // `Host`-header allowlist for the HTTP DNS-rebinding guard.
-            // Sourced from Config (which already handles the
-            // `AI_MEMORY_ALLOWED_HOSTS=a,b,c` env-string vs.
-            // config.toml sequence forms via the string-or-vec
-            // deserializer). Logged so operators can verify the
-            // effective list against what they intended.
-            info!(
-                allowed_hosts = ?config.allowed_hosts,
-                "HTTP Host-header allowlist"
-            );
-            // Default to stateless Streamable HTTP: each POST is serviced
-            // independently and answered as plain `application/json`, so
-            // stateless clients (OpenCode `type: "remote"`, curl) work
-            // without an `mcp-remote` shim (issue #3). ai-memory's tools
-            // are pure request-response and project resolution rides the
-            // in-process `ActiveProject` pointer, not the transport
-            // session — so session mode buys us nothing. `--http-stateful`
-            // restores rmcp's session+SSE behaviour for clients that want
-            // it.
-            info!(
-                stateful = args.http_stateful,
-                "MCP Streamable HTTP transport mode"
-            );
-            let mcp_service = StreamableHttpService::new(
-                move || Ok(server_clone.clone()),
-                LocalSessionManager::default().into(),
-                StreamableHttpServerConfig::default()
-                    .with_cancellation_token(cancel.child_token())
-                    .with_allowed_hosts(config.allowed_hosts.clone())
-                    .with_stateful_mode(args.http_stateful)
-                    .with_json_response(!args.http_stateful),
-            );
             // Shared per-cwd project cache: the hook router owns it; the admin
             // router gets an awaited eviction hook so scope mutations can
             // proactively drop stale entries before the next hook re-resolves.
@@ -645,7 +612,11 @@ pub async fn run(config: &Config, args: ServeArgs) -> Result<()> {
             // reads it. Two instances would report zeros to the operator
             // while the real counts accumulated somewhere unreachable.
             let ingest_metrics = std::sync::Arc::new(ai_memory_core::IngestMetrics::default());
-            let hooks = hook_router(HookState {
+            // Built before the MCP service so the same state can be shared
+            // with `memory_session_end`, which finalizes a session through
+            // this very router instead of keeping its own copy of the
+            // SessionEnd path.
+            let hook_state = HookState {
                 ingest_metrics: ingest_metrics.clone(),
                 workspace_id: ws,
                 project_id: proj,
@@ -680,7 +651,42 @@ pub async fn run(config: &Config, args: ServeArgs) -> Result<()> {
                 home_dir: config.home_dir.clone(),
                 trusted_proxy_identity: trusted_proxy_identity_enabled(&config.auth),
                 mid_session_routing: config.routing.mid_session,
-            });
+            };
+            let server = server.with_hook_state(hook_state.clone());
+            let hooks = hook_router(hook_state);
+            let server_clone = server.clone();
+            // `Host`-header allowlist for the HTTP DNS-rebinding guard.
+            // Sourced from Config (which already handles the
+            // `AI_MEMORY_ALLOWED_HOSTS=a,b,c` env-string vs.
+            // config.toml sequence forms via the string-or-vec
+            // deserializer). Logged so operators can verify the
+            // effective list against what they intended.
+            info!(
+                allowed_hosts = ?config.allowed_hosts,
+                "HTTP Host-header allowlist"
+            );
+            // Default to stateless Streamable HTTP: each POST is serviced
+            // independently and answered as plain `application/json`, so
+            // stateless clients (OpenCode `type: "remote"`, curl) work
+            // without an `mcp-remote` shim (issue #3). ai-memory's tools
+            // are pure request-response and project resolution rides the
+            // in-process `ActiveProject` pointer, not the transport
+            // session — so session mode buys us nothing. `--http-stateful`
+            // restores rmcp's session+SSE behaviour for clients that want
+            // it.
+            info!(
+                stateful = args.http_stateful,
+                "MCP Streamable HTTP transport mode"
+            );
+            let mcp_service = StreamableHttpService::new(
+                move || Ok(server_clone.clone()),
+                LocalSessionManager::default().into(),
+                StreamableHttpServerConfig::default()
+                    .with_cancellation_token(cancel.child_token())
+                    .with_allowed_hosts(config.allowed_hosts.clone())
+                    .with_stateful_mode(args.http_stateful)
+                    .with_json_response(!args.http_stateful),
+            );
             let workstreams = workstream_router(WorkstreamState {
                 writer: store.writer.clone(),
                 reader: store.reader.clone(),

@@ -238,6 +238,17 @@ developer, user, and canonical project instructions.\n\
   pending handoff. Requires the exact `handoff_id` from the begin call \
   and marks it expired so the next session will not consume it. \
   `any_owner=true` is root-only recovery and requires an explicit user request.\n\
+- `memory_session_end` — when the user says they are wrapping up or \
+  asks to end the session, and on any agent whose CLI does not fire a \
+  real session-end hook: Grok Build skips it on `/exit` and `/home`, \
+  and Codex has no session-end hook at all, so their sessions otherwise \
+  stay open with no summary page and no handoff for the next agent. \
+  Writes `sessions/<id>.md` and opens the handoff, running the same path \
+  a real session-end hook takes. Omit `session_id` to close the newest \
+  open session you own in the current project; on Grok Build also pass \
+  `project`, since its MCP calls carry no cwd. Prefer this over \
+  `memory_handoff_begin` for wrap-up — that one only leaves a handoff \
+  and does not end the session.\n\
 - `memory_consolidate` — when the user asks to compile session \
   observations into wiki pages. Also runs on PreCompact, and at \
   session end only when AI_MEMORY_CONSOLIDATE_ON_SESSION_END is set. \
@@ -448,6 +459,13 @@ pub struct AiMemoryServer {
     /// default, and every deployment that never sets the flag — means a nested
     /// slot path is an ordinary shared page, so both stay exactly as they were.
     per_user_slots: bool,
+    /// Hook-router state, shared with the HTTP `/hook` ingress. Needed by
+    /// `memory_session_end`, which finalizes a session by running the very
+    /// same `SessionEnd` path a real lifecycle hook would, rather than
+    /// keeping a second copy of the end logic here. `None` in stdio mode
+    /// and for callers that build the server without hook ingress — the
+    /// tool then reports that it is unavailable instead of half-working.
+    hook_state: Option<ai_memory_hooks::HookState>,
     // Read by the `#[tool_handler]` macro expansion; rustc's dead-code
     // analysis can't see that, so the lint must be allowed explicitly.
     #[allow(dead_code)]
@@ -1009,6 +1027,26 @@ struct HandoffAcceptArgs {
 }
 
 #[derive(Debug, Serialize, Deserialize, schemars::JsonSchema)]
+struct SessionEndArgs {
+    /// Session to finalize, as the canonical UUID shown in
+    /// `sessions/<id>.md`. Omit to close the most recently started open
+    /// session in the resolved project that this caller owns — the usual
+    /// case, since the agent is asking to close the session it is in.
+    #[serde(default)]
+    session_id: Option<String>,
+    /// Project whose session to close. Omit to target the current project.
+    /// **Omit unless the user explicitly names a different project.** Grok
+    /// Build must pass it: its MCP calls carry no cwd, so the current
+    /// project cannot be inferred.
+    #[serde(default)]
+    project: Option<String>,
+    /// Workspace to close within, together with `project`. Omit for the
+    /// current/default workspace resolution chain.
+    #[serde(default)]
+    workspace: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, schemars::JsonSchema)]
 struct HandoffCancelArgs {
     /// Cancel even when the handoff belongs to another operator. Off by
     /// default; requires the same authority as other cross-operator actions.
@@ -1269,6 +1307,7 @@ impl AiMemoryServer {
             access_bump_seen: Arc::new(Mutex::new(HashMap::new())),
             trusted_proxy_identity: false,
             per_user_slots: false,
+            hook_state: None,
             tool_router: Self::tool_router(),
         }
     }
@@ -1775,6 +1814,17 @@ impl AiMemoryServer {
     #[must_use]
     pub fn with_wiki(mut self, wiki: Wiki) -> Self {
         self.wiki = Some(wiki);
+        self
+    }
+
+    /// Share the hook router's state so `memory_session_end` can finalize
+    /// a session through the real `SessionEnd` path. Pass the same value
+    /// handed to `hook_router` — both sides must see one writer, one
+    /// wiki, and one project cache, or the tool would end sessions the
+    /// hook ingress cannot see.
+    #[must_use]
+    pub fn with_hook_state(mut self, hook_state: ai_memory_hooks::HookState) -> Self {
+        self.hook_state = Some(hook_state);
         self
     }
 
@@ -3622,6 +3672,128 @@ impl AiMemoryServer {
         ok_json(&result)
     }
 
+    /// End an open session on demand, running the real SessionEnd path.
+    #[tool(description = "End the current session: write its \
+        `sessions/<id>.md` summary page and open a handoff for the next \
+        agent. Use when the user says they are wrapping up, or on an agent \
+        whose CLI never fires a real session-end hook — Grok Build skips it \
+        on `/exit` and `/home`, and Codex has no session-end hook at all, so \
+        without this their sessions stay open with no summary and no \
+        handoff. Omit `session_id` to close the newest open session you own \
+        in the current project; on Grok Build also pass `project`, since \
+        MCP calls there carry no cwd. This runs the same path a real \
+        session-end hook takes, so a session already ended stays ended \
+        rather than being summarised twice.")]
+    async fn memory_session_end(
+        &self,
+        Parameters(args): Parameters<SessionEndArgs>,
+        OptionalParts(parts): OptionalParts,
+    ) -> Result<CallToolResult, McpError> {
+        let Some(hook_state) = self.hook_state.as_ref() else {
+            return Err(McpError::internal_error(
+                "memory_session_end requires the server to be built with hook ingress; \
+                 it is unavailable in stdio mode",
+                None,
+            ));
+        };
+        let aps_actor = Self::actor_key_from_parts(Some(&parts));
+        let (ws, proj) = self
+            .write_target_ids_with_actor(
+                args.workspace.as_deref(),
+                args.project.as_deref(),
+                &aps_actor,
+            )
+            .await?;
+        let actor_ctx = crate::actor::actor_from_parts(&parts);
+        let identity = actor_ctx.identity_key();
+        // Owner-scoped from the start: on a shared server the newest open
+        // session in a project is frequently a teammate's live one, and this
+        // call ends whatever it selects.
+        let owner_filter = ai_memory_core::OwnerFilter::for_actor_context(&actor_ctx);
+        let open = self
+            .reader
+            .open_sessions_for_scope_any_agent(ws, proj, owner_filter, None)
+            .await
+            .map_err(|e| McpError::internal_error(format!("listing open sessions: {e}"), None))?;
+
+        let selected = match args.session_id.as_deref().map(str::trim) {
+            Some(wanted) if !wanted.is_empty() => open
+                .iter()
+                .find(|s| s.session_id.to_string() == wanted)
+                .ok_or_else(|| {
+                    McpError::invalid_params(
+                        format!(
+                            "no open session {wanted} in this project that you own; \
+                             open sessions here: [{}]",
+                            open.iter()
+                                .map(|s| s.session_id.to_string())
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ),
+                        None,
+                    )
+                })?,
+            _ => open.first().ok_or_else(|| {
+                McpError::invalid_params(
+                    "no open session to end in this project. It may already have been \
+                     finalized by a real session-end hook, or belong to another operator.",
+                    None,
+                )
+            })?,
+        };
+
+        let env = ai_memory_hooks::HookEnvelope::from_query_and_body(
+            ai_memory_hooks::HookQuery {
+                event: "session-end".to_string(),
+                agent: Some(selected.agent_kind.as_str().to_string()),
+                cwd: selected.cwd.clone(),
+                session_id: Some(selected.session_id.to_string()),
+                ..Default::default()
+            },
+            serde_json::json!({}),
+        );
+        // AuthLevel only gates the cross-owner `all_owners` branch, which this
+        // envelope never requests; the ownership check that matters is the
+        // `identity` above, which the ingest path turns back into an owner
+        // filter of its own.
+        ai_memory_hooks::finalize_session_now(
+            hook_state,
+            env,
+            identity,
+            ai_memory_core::AuthLevel::Anonymous,
+        )
+        .await
+        .map_err(|e| McpError::internal_error(format!("finalizing session: {e}"), None))?;
+
+        let session_id = selected.session_id;
+        let still_open = self
+            .reader
+            .open_sessions_for_scope_any_agent(
+                ws,
+                proj,
+                ai_memory_core::OwnerFilter::Any,
+                None,
+            )
+            .await
+            .map(|rows| rows.iter().any(|s| s.session_id == session_id))
+            .unwrap_or(false);
+        let handoff = self
+            .reader
+            .latest_open_handoff(ws, proj, None, ai_memory_core::OwnerFilter::Any)
+            .await
+            .ok()
+            .flatten()
+            .map(|h| h.scope.id.to_string());
+        let result = serde_json::json!({
+            "session_id": session_id.to_string(),
+            "agent": selected.agent_kind.as_str(),
+            "ended": !still_open,
+            "summary_page": format!("sessions/{session_id}.md"),
+            "handoff_id": handoff,
+        });
+        ok_json(&result)
+    }
+
     /// Report aggregate counts (pages, sessions, observations).
     #[tool(description = "Report aggregate memory counts and runtime status \
         (pages latest, pages all versions, sessions, observations). \
@@ -4972,6 +5144,7 @@ mod tests {
         "memory_handoff_accept",
         "memory_handoff_begin",
         "memory_handoff_cancel",
+        "memory_session_end",
         "memory_consolidate",
         "memory_auto_improve",
         "memory_write_page",
@@ -8702,6 +8875,220 @@ mod tests {
             !scoped_text.contains("cluster.md"),
             "explicit scope must not broaden: {scoped_text}"
         );
+    }
+
+    /// Build a `HookState` wired to the same store/wiki the server uses, so
+    /// `memory_session_end` runs the real SessionEnd path in tests.
+    fn test_hook_state(
+        store: &Store,
+        wiki: &Wiki,
+        ws: WorkspaceId,
+        proj: ProjectId,
+    ) -> ai_memory_hooks::HookState {
+        ai_memory_hooks::HookState {
+            ingest_metrics: Arc::new(ai_memory_core::IngestMetrics::default()),
+            workspace_id: ws,
+            project_id: proj,
+            writer: store.writer.clone(),
+            reader: store.reader.clone(),
+            wiki: wiki.clone(),
+            consolidator: None,
+            sanitizer: ai_memory_core::Sanitizer::default(),
+            project_cache: Arc::new(tokio::sync::Mutex::new(
+                ai_memory_hooks::ProjectCacheStore::default(),
+            )),
+            active_project: ActiveProject::default(),
+            ingest_semaphore: Arc::new(tokio::sync::Semaphore::new(8)),
+            ingest_gates: ai_memory_hooks::IngestGates::default(),
+            consolidate_on_session_end: false,
+            session_consolidation_notify: None,
+            capture_assistant_enabled: false,
+            per_user_slots: false,
+            mid_session_routing: ai_memory_core::MidSessionRouting::default(),
+            subagent_sessions: Arc::new(tokio::sync::Mutex::new(
+                ai_memory_hooks::SubagentSessionSet::default(),
+            )),
+            ingest_rate: Arc::new(tokio::sync::Mutex::new(
+                ai_memory_hooks::IngestRateLimiter::disabled(),
+            )),
+            home_dir: None,
+            trusted_proxy_identity: false,
+        }
+    }
+
+    fn test_parts() -> axum::http::request::Parts {
+        axum::http::Request::builder()
+            .uri("/mcp")
+            .method("POST")
+            .body(())
+            .unwrap()
+            .into_parts()
+            .0
+    }
+
+    #[tokio::test]
+    async fn memory_session_end_closes_session_and_writes_summary() {
+        let tmp = TempDir::new().unwrap();
+        let store = Store::open(tmp.path()).unwrap();
+        let ws = store
+            .writer
+            .get_or_create_workspace("default")
+            .await
+            .unwrap();
+        let proj = store
+            .writer
+            .get_or_create_project(ws, "scratch", None)
+            .await
+            .unwrap();
+        let wiki = Wiki::new(tmp.path(), store.writer.clone()).unwrap();
+
+        // An open session with substantive work — a lifecycle-only session
+        // ends without a summary page by design, which would make this test
+        // pass for the wrong reason.
+        let session_id = SessionId::new();
+        store
+            .writer
+            .begin_session(NewSession {
+                id: session_id,
+                workspace_id: ws,
+                project_id: proj,
+                agent_kind: AgentKind::Grok,
+                cwd: None,
+                actor_user: None,
+            })
+            .await
+            .unwrap();
+        store
+            .writer
+            .insert_observation(Sanitized::new(
+                NewObservation {
+                    session_id,
+                    workspace_id: ws,
+                    project_id: proj,
+                    kind: ObservationKind::UserPrompt,
+                    extension: None,
+                    source_event: None,
+                    title: "fix the drain".into(),
+                    body: "the spool never flushed on /exit".into(),
+                    importance: 5,
+                },
+                &Sanitizer::builtin(),
+            ))
+            .await
+            .unwrap();
+
+        let server = AiMemoryServer::new(store.reader.clone(), store.writer.clone(), ws, proj)
+            .with_wiki(wiki.clone())
+            .with_hook_state(test_hook_state(&store, &wiki, ws, proj));
+
+        let result = server
+            .memory_session_end(
+                Parameters(SessionEndArgs {
+                    session_id: None,
+                    project: None,
+                    workspace: None,
+                }),
+                OptionalParts(test_parts()),
+            )
+            .await
+            .unwrap();
+        let text = result
+            .content
+            .first()
+            .and_then(|c| c.as_text())
+            .map(|t| t.text.clone())
+            .unwrap();
+        assert!(text.contains(&session_id.to_string()), "got {text}");
+        assert!(text.contains("\"ended\": true"), "got {text}");
+
+        // The session is really closed in the store, not just reported as such.
+        let still_open = store
+            .reader
+            .open_sessions_for_scope_any_agent(ws, proj, ai_memory_core::OwnerFilter::Any, None)
+            .await
+            .unwrap();
+        assert!(
+            !still_open.iter().any(|s| s.session_id == session_id),
+            "session must be closed, still open: {still_open:?}"
+        );
+
+        // …and the summary page the tool promises actually exists. Reporting
+        // `ended` while writing nothing is the failure mode worth pinning:
+        // the next agent would get a closed session with no context.
+        let summary_path = format!("sessions/{session_id}.md");
+        let page = store
+            .reader
+            .page_meta_by_path(&summary_path)
+            .await
+            .unwrap();
+        assert!(page.is_some(), "missing summary page {summary_path}");
+    }
+
+    #[tokio::test]
+    async fn memory_session_end_reports_when_there_is_nothing_open() {
+        let tmp = TempDir::new().unwrap();
+        let store = Store::open(tmp.path()).unwrap();
+        let ws = store
+            .writer
+            .get_or_create_workspace("default")
+            .await
+            .unwrap();
+        let proj = store
+            .writer
+            .get_or_create_project(ws, "scratch", None)
+            .await
+            .unwrap();
+        let wiki = Wiki::new(tmp.path(), store.writer.clone()).unwrap();
+        let server = AiMemoryServer::new(store.reader.clone(), store.writer.clone(), ws, proj)
+            .with_wiki(wiki.clone())
+            .with_hook_state(test_hook_state(&store, &wiki, ws, proj));
+
+        let err = server
+            .memory_session_end(
+                Parameters(SessionEndArgs {
+                    session_id: None,
+                    project: None,
+                    workspace: None,
+                }),
+                OptionalParts(test_parts()),
+            )
+            .await
+            .expect_err("no open session must be an error, not a silent no-op");
+        assert!(
+            err.to_string().contains("no open session"),
+            "unhelpful error: {err}"
+        );
+    }
+
+    #[tokio::test]
+    async fn memory_session_end_without_hook_state_is_unavailable() {
+        let tmp = TempDir::new().unwrap();
+        let store = Store::open(tmp.path()).unwrap();
+        let ws = store
+            .writer
+            .get_or_create_workspace("default")
+            .await
+            .unwrap();
+        let proj = store
+            .writer
+            .get_or_create_project(ws, "scratch", None)
+            .await
+            .unwrap();
+        // stdio mode: no hook ingress, so the tool must say so rather than
+        // pretending to end anything.
+        let server = AiMemoryServer::new(store.reader.clone(), store.writer.clone(), ws, proj);
+        let err = server
+            .memory_session_end(
+                Parameters(SessionEndArgs {
+                    session_id: None,
+                    project: None,
+                    workspace: None,
+                }),
+                OptionalParts(test_parts()),
+            )
+            .await
+            .expect_err("must not claim success without hook ingress");
+        assert!(err.to_string().contains("hook ingress"), "got {err}");
     }
 
     #[tokio::test]

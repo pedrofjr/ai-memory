@@ -568,6 +568,23 @@ pub struct OpenSession {
     pub cwd: Option<String>,
 }
 
+/// Open session in a scope together with the agent that opened it.
+///
+/// [`OpenSession`] is enough for callers that already know which agent
+/// they are finalizing. The MCP `memory_session_end` tool does not: it
+/// runs on whatever CLI the user happens to be in and has to rebuild a
+/// SessionEnd envelope for the agent that actually owns the row, so it
+/// needs the agent back out of the store.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OpenSessionAgent {
+    /// Session id.
+    pub session_id: SessionId,
+    /// Captured session cwd, if available.
+    pub cwd: Option<String>,
+    /// Agent that opened the session.
+    pub agent_kind: AgentKind,
+}
+
 /// One session as listed from a scope by [`ReaderPool::sessions_for_scope`]
 /// and [`ReaderPool::session_summary_scoped`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -2321,6 +2338,73 @@ impl ReaderPool {
                 out.push(OpenSession {
                     session_id: SessionId::from_slice(&id_bytes)?,
                     cwd,
+                });
+            }
+            Ok(out)
+        })
+        .await
+    }
+
+    /// Open sessions in a scope regardless of which agent opened them,
+    /// most recently started first.
+    ///
+    /// The agent-filtered variants above serve hook paths, which always
+    /// know their own agent. The MCP `memory_session_end` tool does not:
+    /// the user asks to close "this session" from whatever CLI they are
+    /// in, and the row to close may have been opened by another agent in
+    /// the same project.
+    ///
+    /// `owner_filter` is not optional in practice: on a shared server,
+    /// dropping the owner predicate returns whichever session in the
+    /// scope started last — frequently a teammate's live one — and this
+    /// caller ends it.
+    ///
+    /// # Errors
+    /// Propagates any SQL or pool error.
+    pub async fn open_sessions_for_scope_any_agent(
+        &self,
+        workspace_id: WorkspaceId,
+        project_id: ProjectId,
+        owner_filter: OwnerFilter,
+        limit: Option<usize>,
+    ) -> StoreResult<Vec<OpenSessionAgent>> {
+        self.with_conn(move |conn| {
+            let limit_clause = limit.map_or(String::new(), |n| format!(" LIMIT {}", n.max(1)));
+            let owner_clause = match &owner_filter {
+                OwnerFilter::Any => "",
+                OwnerFilter::User(_) => " AND (actor_user IS NULL OR actor_user = ?3)",
+                OwnerFilter::Unattributed => " AND actor_user IS NULL",
+            };
+            let sql = format!(
+                "SELECT id, cwd, agent_kind FROM sessions \
+                 WHERE workspace_id = ?1 AND project_id = ?2 \
+                   AND ended_at IS NULL{owner_clause} \
+                 ORDER BY started_at DESC, id DESC{limit_clause}"
+            );
+            let mut stmt = conn.prepare_cached(&sql)?;
+            let row_map = |row: &rusqlite::Row<'_>| {
+                let id_bytes: Vec<u8> = row.get(0)?;
+                let cwd: Option<String> = row.get(1)?;
+                let agent: String = row.get(2)?;
+                Ok((id_bytes, cwd, agent))
+            };
+            let rows = match &owner_filter {
+                OwnerFilter::User(user) => stmt.query_map(
+                    params![workspace_id.as_bytes(), project_id.as_bytes(), user],
+                    row_map,
+                )?,
+                _ => stmt.query_map(
+                    params![workspace_id.as_bytes(), project_id.as_bytes()],
+                    row_map,
+                )?,
+            };
+            let mut out = Vec::new();
+            for row in rows {
+                let (id_bytes, cwd, agent) = row?;
+                out.push(OpenSessionAgent {
+                    session_id: SessionId::from_slice(&id_bytes)?,
+                    cwd,
+                    agent_kind: AgentKind::from_wire(&agent),
                 });
             }
             Ok(out)

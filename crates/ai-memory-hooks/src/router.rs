@@ -2298,6 +2298,32 @@ async fn process(
     }
 }
 
+/// Run a session to its end through the same path a real `SessionEnd`
+/// hook takes, with no HTTP request behind it.
+///
+/// Some agents never fire a true SessionEnd: Grok's `/exit` and `/home`
+/// skip it, and Codex has no session-end hook at all. Those sessions
+/// stay open forever — no `sessions/<id>.md`, no handoff for whoever
+/// comes next. The MCP `memory_session_end` tool closes them on demand
+/// and calls in here.
+///
+/// This deliberately delegates to `process_authorized` instead of
+/// reimplementing the end path. Lifecycle-only detection, session-owner
+/// attribution, the handoff ownership gate, and the wiki auto-commit all
+/// live there; a parallel copy would drift from the hook path the moment
+/// either side changed.
+///
+/// # Errors
+/// Propagates whatever the hook ingest path returns.
+pub async fn finalize_session_now(
+    state: &HookState,
+    env: HookEnvelope,
+    actor: Option<IdentityKey>,
+    level: ai_memory_core::AuthLevel,
+) -> anyhow::Result<()> {
+    process_authorized(state, env, actor, level, Vec::new()).await
+}
+
 async fn process_authorized(
     state: &HookState,
     env: HookEnvelope,
