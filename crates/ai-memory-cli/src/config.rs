@@ -327,6 +327,7 @@ pub struct RuntimeEnv {
     pub cursor_agent_cwd: Option<String>,
     pub cursor_timeout_ms: Option<u64>,
     pub cursor_model_fast: Option<bool>,
+    pub cursor_model_effort: Option<String>,
 }
 
 impl RuntimeEnv {
@@ -370,6 +371,7 @@ impl RuntimeEnv {
             cursor_agent_cwd: env_string("CURSOR_AGENT_CWD"),
             cursor_timeout_ms: env_u64("CURSOR_TIMEOUT_MS"),
             cursor_model_fast: env_bool("CURSOR_MODEL_FAST"),
+            cursor_model_effort: env_string("CURSOR_MODEL_EFFORT"),
         }
     }
 
@@ -1031,6 +1033,13 @@ impl Config {
         };
         let cursor_timeout_ms = self.runtime_env.cursor_timeout_ms.unwrap_or(120_000);
         let cursor_model_fast = self.runtime_env.cursor_model_fast.unwrap_or(false);
+        let cursor_model_effort = self
+            .runtime_env
+            .cursor_model_effort
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string);
         Ok(Some(ProviderConfig {
             provider,
             model,
@@ -1047,6 +1056,7 @@ impl Config {
             cursor_cwd,
             cursor_timeout_ms,
             cursor_model_fast,
+            cursor_model_effort,
         }))
     }
 

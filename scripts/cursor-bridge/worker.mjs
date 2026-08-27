@@ -49,11 +49,13 @@ async function waitRunWithCancel(run, timeoutMs) {
   }
 }
 
-function buildModelSelection(modelId, modelFast) {
-  return {
-    id: modelId,
-    params: [{ id: "fast", value: modelFast ? "true" : "false" }],
-  };
+function buildModelSelection(modelId, modelFast, modelEffort) {
+  const params = [{ id: "fast", value: modelFast ? "true" : "false" }];
+  const effort = typeof modelEffort === "string" ? modelEffort.trim() : "";
+  if (effort) {
+    params.unshift({ id: "effort", value: effort });
+  }
+  return { id: modelId, params };
 }
 
 function buildPrompt(input) {
@@ -114,6 +116,7 @@ async function main() {
   const model = buildModelSelection(
     input.model ?? "composer-2.5",
     Boolean(input.modelFast),
+    input.modelEffort,
   );
   const cwd = input.cwd ?? process.cwd();
   const timeoutMs = Number(input.timeoutMs) > 0 ? Number(input.timeoutMs) : 120_000;

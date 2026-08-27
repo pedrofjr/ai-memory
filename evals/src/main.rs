@@ -381,6 +381,7 @@ impl From<ResolvedConfig> for ProviderConfig {
             cursor_cwd,
             cursor_timeout_ms: 120_000,
             cursor_model_fast: false,
+            cursor_model_effort: None,
         }
     }
 }

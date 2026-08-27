@@ -33,6 +33,13 @@ pub async fn run(config: &Config, args: LlmTestArgs) -> Result<()> {
         cursor_cwd,
         cursor_timeout_ms: config.runtime_env.cursor_timeout_ms.unwrap_or(120_000),
         cursor_model_fast: config.runtime_env.cursor_model_fast.unwrap_or(false),
+        cursor_model_effort: config
+            .runtime_env
+            .cursor_model_effort
+            .as_deref()
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(str::to_string),
     };
     let client = build_provider(provider_config).context("building LLM provider")?;
     info!(

@@ -32,6 +32,8 @@ pub struct CursorProviderConfig {
     pub timeout_ms: u64,
     /// Composer `fast` model param.
     pub model_fast: bool,
+    /// Optional effort param for models that expose it (e.g. Grok `low`/`medium`/`high`).
+    pub model_effort: Option<String>,
     /// Path to `scripts/cursor-bridge/worker.mjs`.
     pub bridge_script: PathBuf,
     /// Node executable (`node` or `AI_MEMORY_NODE`).
@@ -84,6 +86,8 @@ struct BridgeRequest<'a> {
     model: &'a str,
     #[serde(rename = "modelFast")]
     model_fast: bool,
+    #[serde(rename = "modelEffort", skip_serializing_if = "Option::is_none")]
+    model_effort: Option<&'a str>,
     cwd: String,
     #[serde(rename = "timeoutMs")]
     timeout_ms: u64,
@@ -142,6 +146,7 @@ impl CursorSdkProvider {
             messages: &request.messages,
             model: &self.cfg.model,
             model_fast: self.cfg.model_fast,
+            model_effort: self.cfg.model_effort.as_deref(),
             cwd: self.cfg.cwd.display().to_string(),
             timeout_ms: self.cfg.timeout_ms,
             schema,
