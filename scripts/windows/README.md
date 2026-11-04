@@ -129,6 +129,20 @@ Abre `~/.ai-memory/db/memory.sqlite` em modo somente-leitura e reporta a
 cobertura por workspace comparando com o triple `provider/model/dim` esperado
 (constantes no topo do arquivo). Não escreve nada.
 
+## Rodar a suíte de testes
+
+```powershell
+cargo test --workspace --all-targets
+```
+
+No Windows, alguns testes de paridade dos hooks invocam `sh` para fazer source de
+`hooks/_lib.sh`. Sem o `sh` do Git no PATH eles falham com `program not found`
+(o resto da suíte passa). Para esta máquina:
+
+```powershell
+$env:PATH = "C:\Program Files\Git\bin;" + $env:PATH
+```
+
 ## Issues para upstream
 
 `docs/issues/` guarda os drafts de issue que o fork mantém para propor mudanças
