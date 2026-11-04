@@ -242,6 +242,12 @@ pub struct EmbedderConfig {
     /// Nemotron-3-Embed / base E5 — not every model needs one; see
     /// `query_prefix`'s doc comment).
     pub document_prefix: String,
+    /// Byte ceiling for one embedding input, for the `openai` and
+    /// `openai-compat` embedders. `None` keeps the OpenAI-derived limit (a
+    /// token budget capped at 8 KB), which silently drops most of a long page
+    /// for a model whose context window is wider — Qwen3-Embedding takes 32k.
+    /// Sourced once from `AI_MEMORY_EMBEDDING_MAX_BYTES` by `Config::load`.
+    pub max_input_bytes: Option<usize>,
 }
 
 /// Construct an `Arc<dyn Embedder>` from the config.
@@ -261,6 +267,9 @@ pub fn build_embedder(config: EmbedderConfig) -> LlmResult<Arc<dyn Embedder>> {
                 .with_prefixes(config.query_prefix, config.document_prefix);
             if let Some(url) = config.base_url {
                 e = e.with_base_url(url);
+            }
+            if let Some(max_bytes) = config.max_input_bytes {
+                e = e.with_max_input_bytes(max_bytes);
             }
             Arc::new(e)
         }
@@ -283,10 +292,12 @@ pub fn build_embedder(config: EmbedderConfig) -> LlmResult<Arc<dyn Embedder>> {
                 .base_url
                 .ok_or_else(|| LlmError::NotConfigured("AI_MEMORY_EMBEDDING_BASE_URL".into()))?;
             let api_key = (!config.api_key.expose_secret().is_empty()).then_some(config.api_key);
-            Arc::new(
-                OpenAiCompatEmbedder::new(base, api_key, config.model, config.dim)?
-                    .with_prefixes(config.query_prefix, config.document_prefix),
-            )
+            let mut e = OpenAiCompatEmbedder::new(base, api_key, config.model, config.dim)?
+                .with_prefixes(config.query_prefix, config.document_prefix);
+            if let Some(max_bytes) = config.max_input_bytes {
+                e = e.with_max_input_bytes(max_bytes);
+            }
+            Arc::new(e)
         }
         #[cfg(feature = "local-embeddings")]
         EmbedderChoice::Local => {

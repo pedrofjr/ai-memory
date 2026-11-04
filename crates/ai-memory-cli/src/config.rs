@@ -616,6 +616,16 @@ pub struct Config {
     /// `AI_MEMORY_EMBEDDING_DOCUMENT_PREFIX` (same raw-env overlay as
     /// `embedding_query_prefix`).
     pub embedding_document_prefix: Option<String>,
+    /// Byte ceiling for one embedding input, applied by the `openai` and
+    /// `openai-compat` embedders. Unset keeps the OpenAI-derived limit: a
+    /// token budget capped at 8 KB. Set it when the model's context window is
+    /// wider — Qwen3-Embedding takes 32k, so an 8 KB cap silently drops most
+    /// of a long page from its vector. Not part of the stored embedding
+    /// identity: existing vectors keep whatever they were embedded with, so a
+    /// change affects new and changed pages only, unless `ai-memory embed
+    /// --force` re-embeds everything. Settable via
+    /// `AI_MEMORY_EMBEDDING_MAX_BYTES`.
+    pub embedding_max_bytes: Option<usize>,
     /// M8 retention-sweep parameters. The defaults give an ~80-day
     /// "survival floor" for unused episodic content (above the cold
     /// threshold), followed by ~180 days of tombstone grace before permanent
@@ -1498,6 +1508,7 @@ impl Default for Config {
             embedding_base_url: None,
             embedding_query_prefix: None,
             embedding_document_prefix: None,
+            embedding_max_bytes: None,
             decay: DecaySettings::default(),
             maintenance: MaintenanceSettings::default(),
             sessions: SessionsSettings::default(),
@@ -2789,6 +2800,15 @@ impl Config {
                 config.llm_timeout_secs
             );
         }
+        // A zero cap would truncate every embedding input to nothing, so the
+        // provider would receive an empty string and the vectors would be
+        // meaningless while still stored under the expected triple.
+        if config.embedding_max_bytes == Some(0) {
+            anyhow::bail!(
+                "embedding_max_bytes must be greater than zero; \
+                 AI_MEMORY_EMBEDDING_MAX_BYTES is a byte ceiling for one embedding input"
+            );
+        }
         // Zero would admit no bootstrap run at all: every request would
         // wait forever for a slot.
         if config.bootstrap_max_concurrent == 0 {
@@ -3356,6 +3376,7 @@ impl Config {
             defaulted,
             query_prefix,
             document_prefix,
+            max_input_bytes: self.embedding_max_bytes,
         }))
     }
 
@@ -6425,6 +6446,57 @@ input_token_safety_margin = {margin}
         };
         let embedder = cfg.embedder_config().unwrap().unwrap();
         assert_eq!(embedder.api_key.expose_secret(), "sk-embed-key");
+    }
+
+    /// The OpenAI-derived 8 KB cap silently drops most of a long page for a
+    /// wider-context model (Qwen3-Embedding takes 32k), so the operator-set
+    /// ceiling has to reach the embedder config.
+    #[test]
+    fn embedding_max_bytes_reaches_the_embedder_config() {
+        let cfg = Config {
+            embedding_provider: Some("openai".into()),
+            embedding_model: Some("qwen/qwen3-embedding-8b".into()),
+            embedding_dim: Some(4096),
+            embedding_max_bytes: Some(32_000),
+            runtime_env: RuntimeEnv {
+                embedding_api_key: Some(SecretString::from("sk-test")),
+                ..RuntimeEnv::default()
+            },
+            ..Config::default()
+        };
+        assert_eq!(
+            cfg.embedder_config().unwrap().unwrap().max_input_bytes,
+            Some(32_000)
+        );
+
+        let unset = Config {
+            embedding_provider: Some("openai".into()),
+            embedding_model: Some("text-embedding-3-small".into()),
+            runtime_env: RuntimeEnv {
+                embedding_api_key: Some(SecretString::from("sk-test")),
+                ..RuntimeEnv::default()
+            },
+            ..Config::default()
+        };
+        assert_eq!(
+            unset.embedder_config().unwrap().unwrap().max_input_bytes,
+            None
+        );
+    }
+
+    /// Zero would truncate every input to nothing while still storing the
+    /// vector under the expected triple, so it fails at load.
+    #[test]
+    fn load_rejects_a_zero_embedding_max_bytes() {
+        let tmp = TempDir::new().unwrap();
+        let config_path = tmp.path().join("config.toml");
+        std::fs::write(&config_path, "embedding_max_bytes = 0\n").unwrap();
+        let error = Config::load(Some(&config_path), Some(tmp.path().to_path_buf()))
+            .expect_err("a zero embedding cap must fail closed");
+        assert!(
+            error.to_string().contains("embedding_max_bytes"),
+            "unexpected error: {error:#}"
+        );
     }
 
     #[test]

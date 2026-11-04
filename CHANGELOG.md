@@ -13,6 +13,17 @@ version in [`docs/changelog/`](docs/changelog/):
 
 ### Added
 
+- Added `AI_MEMORY_EMBEDDING_MAX_BYTES` (`embedding_max_bytes`): the byte
+  ceiling for one embedding input, applied by the `openai` and `openai-compat`
+  embedders. Before this, the cap was the OpenAI-derived pair of a token budget
+  and 8 KB, so a model whose context window is wider — Qwen3-Embedding takes
+  32k — had most of a long page dropped from its vector without any signal:
+  the stored `{provider, model, dim}` never changed, so nothing looked stale.
+  Setting the key makes the configured byte ceiling the only limit. It is not
+  part of the embedding identity, so existing vectors are left alone; only new
+  and changed pages pick it up unless `ai-memory embed --force` re-embeds
+  everything.
+
 - Added Scoop publishing to the maintainer's bucket: on Windows,
   `scoop bucket add akitaonrails https://github.com/akitaonrails/scoop-bucket`
   then `scoop install ai-memory`. Each tagged release pins the manifest to the

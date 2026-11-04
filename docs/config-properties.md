@@ -46,6 +46,7 @@ Defaults that come from a named constant or from another crate say so in the Def
 | `embedding_base_url` | unset | `AI_MEMORY_EMBEDDING_BASE_URL` | Embedding endpoint override. Required when `embedding_provider` is `openai-compat`. |
 | `embedding_query_prefix` | unset | `AI_MEMORY_EMBEDDING_QUERY_PREFIX` | Text prepended to every embedding query for the `openai` and `openai-compat` embedders. Kept verbatim. |
 | `embedding_document_prefix` | unset | `AI_MEMORY_EMBEDDING_DOCUMENT_PREFIX` | Text prepended to every page before embedding. Part of the stored embedding identity. |
+| `embedding_max_bytes` | unset (8 KB token-budget cap) | `AI_MEMORY_EMBEDDING_MAX_BYTES` | Byte ceiling for one embedding input, for `openai` and `openai-compat`. Raise it for a wider-context model (Qwen3-Embedding takes 32k). Not part of the stored embedding identity. |
 | `contradiction_band_min` | `0.4` (`DEFAULT_CONTRADICTION_SIM_LOW`) | `AI_MEMORY_CONTRADICTION_BAND_MIN` | Lower edge, inclusive, of the cosine band `memory_lint` uses to flag likely contradictions. |
 | `contradiction_band_max` | `0.75` (`DEFAULT_CONTRADICTION_SIM_HIGH`) | `AI_MEMORY_CONTRADICTION_BAND_MAX` | Upper edge, exclusive, of that band. At or above it, two pages count as near-duplicates. |
 

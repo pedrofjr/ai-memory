@@ -24,7 +24,7 @@ use tracing::debug;
 use crate::error::{LlmError, LlmResult};
 use crate::openai::normalize_openai_base;
 use crate::response::{provider_error, response_json_limited, response_text_limited};
-use crate::text::{truncate_for_embedding, truncate_with_ellipsis};
+use crate::text::{truncate_for_embedding_with_cap, truncate_with_ellipsis};
 
 /// Conservative per-request input cap for OpenAI-compatible embedding APIs
 /// (8192 token server limit; we stay well below with head truncation).
@@ -150,6 +150,9 @@ pub struct OpenAiEmbedder {
     dim: u32,
     query_prefix: String,
     document_prefix: String,
+    /// Operator-configured byte ceiling for one input; `None` keeps the
+    /// token budget capped at [`crate::text::DEFAULT_EMBEDDING_MAX_BYTES`].
+    max_input_bytes: Option<usize>,
 }
 
 impl OpenAiEmbedder {
@@ -176,6 +179,7 @@ impl OpenAiEmbedder {
             dim,
             query_prefix: String::new(),
             document_prefix: String::new(),
+            max_input_bytes: None,
         })
     }
 
@@ -197,6 +201,20 @@ impl OpenAiEmbedder {
     ) -> Self {
         self.query_prefix = query_prefix.into();
         self.document_prefix = document_prefix.into();
+        self
+    }
+
+    /// Replace the byte ceiling applied to one embedding input.
+    ///
+    /// `None` (the default) keeps the OpenAI-derived limit: a token budget
+    /// capped at 8 KB. A provider with a wider context window needs it
+    /// raised — Qwen3-Embedding takes 32k, so a long markdown page that fits
+    /// the model would otherwise have most of its text dropped. The
+    /// configured value becomes the only limit; see
+    /// [`crate::text::truncate_for_embedding_with_cap`].
+    #[must_use]
+    pub fn with_max_input_bytes(mut self, max_bytes: usize) -> Self {
+        self.max_input_bytes = Some(max_bytes);
         self
     }
 }
@@ -353,8 +371,9 @@ async fn openai_style_embed(
     model: &str,
     dim: u32,
     text: &str,
+    max_input_bytes: Option<usize>,
 ) -> LlmResult<Vec<f32>> {
-    let input = truncate_for_embedding(text, OPENAI_EMBED_MAX_TOKENS);
+    let input = truncate_for_embedding_with_cap(text, OPENAI_EMBED_MAX_TOKENS, max_input_bytes);
     let url = normalize_openai_base(base_url, "embeddings");
     debug!(
         url,
@@ -436,6 +455,7 @@ impl Embedder for OpenAiEmbedder {
             &self.model,
             self.dim,
             text,
+            self.max_input_bytes,
         )
         .await
     }
@@ -449,6 +469,7 @@ impl Embedder for OpenAiEmbedder {
             &self.model,
             self.dim,
             &prefixed,
+            self.max_input_bytes,
         )
         .await
     }
@@ -462,6 +483,7 @@ impl Embedder for OpenAiEmbedder {
             &self.model,
             self.dim,
             &prefixed,
+            self.max_input_bytes,
         )
         .await
     }
@@ -494,6 +516,9 @@ pub struct OpenAiCompatEmbedder {
     /// Document-side counterpart of `query_prefix` (e.g. `"passage: "` for
     /// Nemotron-3-Embed / base E5 — not every model needs one).
     document_prefix: String,
+    /// Operator-configured byte ceiling for one input; `None` keeps the
+    /// token budget capped at [`crate::text::DEFAULT_EMBEDDING_MAX_BYTES`].
+    max_input_bytes: Option<usize>,
 }
 
 impl OpenAiCompatEmbedder {
@@ -522,6 +547,7 @@ impl OpenAiCompatEmbedder {
             dim,
             query_prefix: String::new(),
             document_prefix: String::new(),
+            max_input_bytes: None,
         })
     }
 
@@ -542,6 +568,14 @@ impl OpenAiCompatEmbedder {
     ) -> Self {
         self.query_prefix = query_prefix.into();
         self.document_prefix = document_prefix.into();
+        self
+    }
+
+    /// Replace the byte ceiling applied to one embedding input (see
+    /// [`OpenAiEmbedder::with_max_input_bytes`]).
+    #[must_use]
+    pub fn with_max_input_bytes(mut self, max_bytes: usize) -> Self {
+        self.max_input_bytes = Some(max_bytes);
         self
     }
 }
@@ -572,6 +606,7 @@ impl Embedder for OpenAiCompatEmbedder {
             &self.model,
             self.dim,
             text,
+            self.max_input_bytes,
         )
         .await
     }
@@ -585,6 +620,7 @@ impl Embedder for OpenAiCompatEmbedder {
             &self.model,
             self.dim,
             &prefixed,
+            self.max_input_bytes,
         )
         .await
     }
@@ -598,6 +634,7 @@ impl Embedder for OpenAiCompatEmbedder {
             &self.model,
             self.dim,
             &prefixed,
+            self.max_input_bytes,
         )
         .await
     }
@@ -777,11 +814,11 @@ impl Embedder for SyntheticEmbedder {
 }
 
 /// Prepend `prefix` to `text` for an asymmetric embedding model, applied
-/// BEFORE [`truncate_for_embedding`] so truncation always bounds the whole
-/// request body (prefix included) rather than letting a prefix push the
-/// text itself past the server's token limit. An empty prefix — the
-/// default — returns `text` unchanged and borrowed, so the unset case
-/// allocates nothing.
+/// BEFORE [`crate::text::truncate_for_embedding_with_cap`] so truncation
+/// always bounds the whole request body (prefix included) rather than letting
+/// a prefix push the text itself past the server's token limit. An empty
+/// prefix — the default — returns `text` unchanged and borrowed, so the unset
+/// case allocates nothing.
 pub(crate) fn prepend_prefix<'a>(prefix: &str, text: &'a str) -> std::borrow::Cow<'a, str> {
     if prefix.is_empty() {
         std::borrow::Cow::Borrowed(text)
@@ -849,6 +886,7 @@ pub fn cosine(a: &[f32], b: &[f32]) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::text::truncate_for_embedding;
 
     fn header(value: &'static str) -> reqwest::header::HeaderValue {
         reqwest::header::HeaderValue::from_static(value)

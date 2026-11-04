@@ -110,6 +110,7 @@ async fn factory_built_compat_embedder_sends_no_request_id_header() {
         defaulted: false,
         query_prefix: String::new(),
         document_prefix: String::new(),
+        max_input_bytes: None,
     })
     .expect("factory builds compat embedder");
 
@@ -129,6 +130,7 @@ async fn factory_builds_compat_embedder_and_requires_base_url() {
         defaulted: false,
         query_prefix: String::new(),
         document_prefix: String::new(),
+        max_input_bytes: None,
     })
     .expect("factory builds compat embedder");
     assert_eq!(ok.provider(), "openai-compat");
@@ -145,6 +147,7 @@ async fn factory_builds_compat_embedder_and_requires_base_url() {
         defaulted: false,
         query_prefix: String::new(),
         document_prefix: String::new(),
+        max_input_bytes: None,
     }) {
         Ok(_) => panic!("compat embedder must not build without a base URL"),
         Err(err) => err,
@@ -165,6 +168,7 @@ async fn factory_builds_compat_embedder_and_requires_base_url() {
         defaulted: false,
         query_prefix: String::new(),
         document_prefix: String::new(),
+        max_input_bytes: None,
     });
     assert!(
         matches!(zero_dim, Err(LlmError::NotConfigured(ref msg)) if msg.contains("greater than zero")),
@@ -313,6 +317,7 @@ async fn factory_wires_configured_prefixes_into_the_compat_embedder() {
         defaulted: false,
         query_prefix: "query: ".into(),
         document_prefix: "passage: ".into(),
+        max_input_bytes: None,
     })
     .expect("factory builds compat embedder with prefixes");
 

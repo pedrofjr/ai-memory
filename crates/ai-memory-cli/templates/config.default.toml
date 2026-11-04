@@ -304,6 +304,16 @@ log_level = "info"
 #   embedding_query_prefix    = "query: "
 #   embedding_document_prefix = "passage: "
 
+# Byte ceiling for one embedding input (`openai` and `openai-compat`).
+# Unset keeps the OpenAI-derived limit: a token budget capped at 8 KB. Raise it
+# for a model whose context window is wider — Qwen3-Embedding takes 32k, and an
+# 8 KB cap silently drops most of a long page from its vector. The configured
+# value becomes the only limit (the token budget stops applying). Not part of
+# the stored embedding identity: existing vectors keep what they were embedded
+# with, so only new and changed pages pick the new cap up unless you run
+# `ai-memory embed --force`. Env equivalent: `AI_MEMORY_EMBEDDING_MAX_BYTES`.
+#   embedding_max_bytes = 32000
+
 # --- Session lifecycle (server-side) --------------------------------------
 # [sessions] idle_end_after_hours = N (default 0 = off): the maintenance
 # tick ends open sessions whose last activity is older than N hours
