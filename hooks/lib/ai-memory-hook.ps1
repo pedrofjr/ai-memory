@@ -387,6 +387,11 @@ function Invoke-AiMemoryHook {
                         injectSteps = @(@{ ephemeralMessage = $Response.Content })
                     }
                     [Console]::Out.Write(($Payload | ConvertTo-Json -Depth 5 -Compress))
+                } elseif ($Agent -eq 'cursor') {
+                    # Cursor sessionStart contract: JSON additional_context (not raw markdown).
+                    # Raw stdout is ignored / not injected into the agent prompt.
+                    $wrap = @{ additional_context = [string]$Response.Content }
+                    [Console]::Out.Write(($wrap | ConvertTo-Json -Compress -Depth 5))
                 } else {
                     [Console]::Out.Write($Response.Content)
                 }
