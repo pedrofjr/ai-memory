@@ -119,6 +119,8 @@ pub struct ProviderConfig {
     pub cursor_timeout_ms: u64,
     /// Cursor bridge: Composer `fast` param.
     pub cursor_model_fast: bool,
+    /// Cursor bridge: optional effort param (`low` / `medium` / `high` for Grok).
+    pub cursor_model_effort: Option<String>,
 }
 
 /// Embedding providers available to ai-memory.
@@ -344,6 +346,7 @@ pub fn build_provider(config: ProviderConfig) -> LlmResult<Arc<dyn LlmProvider>>
                 cwd,
                 timeout_ms,
                 model_fast: config.cursor_model_fast,
+                model_effort: config.cursor_model_effort,
                 bridge_script,
                 node_bin,
             })?))
@@ -419,6 +422,7 @@ mod tests {
             cursor_cwd: None,
             cursor_timeout_ms: 120_000,
             cursor_model_fast: false,
+            cursor_model_effort: None,
         };
 
         let err = match build_provider(cfg) {
