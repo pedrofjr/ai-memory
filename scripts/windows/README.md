@@ -63,6 +63,22 @@ O Agendador de Tarefas não consegue iniciar o alias MSIX de `%LOCALAPPDATA%\Mic
 
 Remover: `Unregister-ScheduledTask -TaskName ai-memory-serve -Confirm:$false`.
 
+## Acesso remoto por túnel (instância separada)
+
+```powershell
+.\scripts\windows\serve-remote.ps1 -AllowedHosts memory.exemplo.com
+# tunnel apontando para 127.0.0.1:49380
+```
+
+Sobe uma segunda instância em `:49380` com `--enable-web --no-watcher` e bearer token obrigatório, gerado em `~/.ai-memory/remote-token.txt`. A instância local continua sem auth, então hooks e clientes MCP da máquina não mudam de configuração.
+
+Dois cuidados:
+
+- **Host.** O servidor só aceita um `Host` presente em `AI_MEMORY_ALLOWED_HOSTS` (default `localhost`, `127.0.0.1`, `::1`) e responde `403 forbidden host` ao resto. Túneis que preservam o Host original (cloudflared, ngrok) precisam do hostname público em `-AllowedHosts`; sem ele, toda requisição é recusada.
+- **Dois processos, um data dir.** `--no-watcher` evita ingestão dupla do wiki, mas cada processo tem seu próprio scheduler de consolidação e writer actor sobre o mesmo SQLite. Use a instância remota para leitura e Web UI; escritas pesadas ficam na local.
+
+O token fica em claro em `~/.ai-memory/remote-token.txt` — proteja essa pasta como você protegeria uma chave de API.
+
 ## Migrar do agentmemory
 
 Com o **agentmemory** rodando em `:3111` e o **ai-memory** em `:49374`:
