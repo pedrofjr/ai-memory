@@ -10,9 +10,9 @@ use serde::{Deserialize, Serialize};
 use tracing::debug;
 
 use crate::embedding::{Embedder, normalise};
-use crate::text::truncate_for_embedding;
 use crate::error::{LlmError, LlmResult};
 use crate::response::{provider_error_body, response_json_limited};
+use crate::text::truncate_for_embedding;
 
 /// Default Gemini API host.
 pub const DEFAULT_BASE_URL: &str = "https://generativelanguage.googleapis.com";
@@ -276,15 +276,14 @@ mod tests {
             .mount(&server)
             .await;
 
-        let embedder =
-            GoogleEmbedder::new(
-                SecretString::from("test-key"),
-                "gemini-embedding-001",
-                3,
-                crate::DEFAULT_EMBEDDING_MAX_BYTES,
-            )
-                .expect("google embedder builds")
-                .with_base_url(server.uri());
+        let embedder = GoogleEmbedder::new(
+            SecretString::from("test-key"),
+            "gemini-embedding-001",
+            3,
+            crate::DEFAULT_EMBEDDING_MAX_BYTES,
+        )
+        .expect("google embedder builds")
+        .with_base_url(server.uri());
 
         let embedding = embedder
             .embed_document("hello")
