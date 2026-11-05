@@ -8,7 +8,7 @@
 ## Setup rápido
 
 ```powershell
-cd C:\GIT\ai-memory
+cd <raiz do clone>
 
 # 1. Compilar (instala @cursor/sdk no bridge na primeira vez)
 .\scripts\windows\build.ps1
@@ -40,7 +40,7 @@ Copy-Item .env.local.example .env.local
 .\scripts\windows\install-global.ps1 -AddToPath
 ```
 
-Instala em `%USERPROFILE%\.local\bin\` e carrega `C:\GIT\ai-memory\.env` (+ `.env.local` se existir).
+Instala em `%USERPROFILE%\.local\bin\` e carrega o `.env` da raiz do clone (+ `.env.local` se existir).
 
 | Comando | Ação |
 |---------|------|
@@ -69,7 +69,7 @@ Origem: `%USERPROFILE%\.agentmemory` (API REST). Destino: páginas em `imported/
 Após gerar o inventário em `%USERPROFILE%\.ai-memory\runs\consolidate-inventory-*\`:
 
 ```powershell
-cd C:\GIT\ai-memory
+cd <raiz do clone>
 # Servidor + LLM em .env.local; por padrão só dry-run (não grava)
 
 # A) Sessões heurísticas → memory_consolidate (MCP)
@@ -159,7 +159,7 @@ O pi **não** executa `~/.cursor/hooks.json` — a captura no terminal depende d
 ### Instalar
 
 ```powershell
-cd C:\GIT\ai-memory
+cd <raiz do clone>
 .\scripts\windows\install-pi.ps1
 ```
 
@@ -192,7 +192,7 @@ O **OMP** usa `~/.omp/agent/` nativamente (MCP, extensões, `models.json`, `conf
 O OMP descobre modelos Cursor com `"input": ["text"]` no cache `models.db`. O **snapcompact** exige visão (`image`). A correção oficial do OMP é **`modelOverrides` em `~/.omp/agent/models.json`** — reaplicado a cada boot/refresh; **não edite `models.db`**.
 
 ```powershell
-cd C:\GIT\ai-memory
+cd <raiz do clone>
 .\scripts\windows\install-omp.ps1
 ```
 

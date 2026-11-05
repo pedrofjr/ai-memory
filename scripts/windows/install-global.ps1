@@ -1,11 +1,13 @@
 # Instala o comando global ai-memory (estilo agentmemory no PATH).
 param(
-    [string]$RepoRoot = "C:\GIT\ai-memory",
+    # Vazio resolve para a raiz do repo a partir da localizacao deste script.
+    [string]$RepoRoot = "",
     [string]$BinDir = $(Join-Path $env:USERPROFILE ".local\bin"),
     [switch]$AddToPath
 )
 
 $ErrorActionPreference = "Stop"
+if (-not $RepoRoot) { $RepoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot) }
 $RepoRoot = (Resolve-Path $RepoRoot).Path
 $Exe = Join-Path $RepoRoot "target\release\ai-memory.exe"
 
