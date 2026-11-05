@@ -18,6 +18,11 @@ pub async fn run(config: &Config, args: LlmTestArgs) -> Result<()> {
         .api_key
         .filter(|s| !s.is_empty())
         .map(secrecy::SecretString::from);
+    let cursor_cwd = if provider == ProviderChoice::Cursor {
+        Some(config.cursor_working_directory()?)
+    } else {
+        None
+    };
     let provider_config = ProviderConfig {
         provider,
         model: args.model,
@@ -25,6 +30,9 @@ pub async fn run(config: &Config, args: LlmTestArgs) -> Result<()> {
         base_url: args.base_url.or_else(|| config.llm_test_base_url()),
         compat_strict: config.llm_compat_strict,
         request_timeout_secs: config.llm_timeout_secs,
+        cursor_cwd,
+        cursor_timeout_ms: config.runtime_env.cursor_timeout_ms.unwrap_or(120_000),
+        cursor_model_fast: config.runtime_env.cursor_model_fast.unwrap_or(false),
     };
     let client = build_provider(provider_config).context("building LLM provider")?;
     info!(
@@ -67,6 +75,7 @@ impl From<LlmProviderChoice> for ProviderChoice {
             LlmProviderChoice::OpenaiOauth => Self::OpenAiOAuth,
             LlmProviderChoice::Copilot => Self::Copilot,
             LlmProviderChoice::Opencode => Self::OpenCode,
+            LlmProviderChoice::Cursor => Self::Cursor,
         }
     }
 }

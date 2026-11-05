@@ -1,0 +1,9 @@
+{
+  "name": "ai-memory-cursor-bridge",
+  "private": true,
+  "type": "module",
+  "description": "Local @cursor/sdk worker invoked by ai-memory Rust provider",
+  "dependencies": {
+    "@cursor/sdk": "^1.0.13"
+  }
+}

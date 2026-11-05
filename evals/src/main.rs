@@ -298,6 +298,7 @@ fn resolve_provider(side: &str, args: &Args) -> Result<ResolvedConfig> {
         "openai-compat" | "openai_compat" => ProviderChoice::OpenAiCompat,
         "openai-oauth" | "openai_oauth" => ProviderChoice::OpenAiOAuth,
         "copilot" | "github-copilot" | "github_copilot" => ProviderChoice::Copilot,
+        "cursor" => ProviderChoice::Cursor,
         other => {
             bail!(
                 "{side}: provider {other} not one of anthropic|openai|openai-compat|openai-oauth|copilot"
@@ -363,6 +364,11 @@ impl ResolvedConfig {
 
 impl From<ResolvedConfig> for ProviderConfig {
     fn from(r: ResolvedConfig) -> Self {
+        let cursor_cwd = if r.provider == ProviderChoice::Cursor {
+            std::env::current_dir().ok()
+        } else {
+            None
+        };
         Self {
             provider: r.provider,
             model: r.model,
@@ -372,6 +378,9 @@ impl From<ResolvedConfig> for ProviderConfig {
             // same schema-constrained path operators receive.
             compat_strict: true,
             request_timeout_secs: ai_memory_llm::DEFAULT_REQUEST_TIMEOUT_SECS,
+            cursor_cwd,
+            cursor_timeout_ms: 120_000,
+            cursor_model_fast: false,
         }
     }
 }
