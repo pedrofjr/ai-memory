@@ -18,6 +18,34 @@ pub const OPENCODE_ZEN_BASE_URL: &str = "https://opencode.ai/zen/go/v1";
 /// Default model when `AI_MEMORY_LLM_MODEL` is not set.
 pub const OPENCODE_DEFAULT_MODEL: &str = "claude-sonnet-4-6";
 
+/// Client identifier sent as `user-agent`. The gateway asks clients to
+/// identify themselves instead of presenting a generic SDK or HTTP
+/// library agent.
+const OPENCODE_USER_AGENT: &str = concat!("ai-memory/", env!("CARGO_PKG_VERSION"));
+
+/// Optional override for the routing session id.
+const OPENCODE_SESSION_ENV: &str = "OPENCODE_SESSION_ID";
+
+/// Stable id sent as `x-opencode-session`.
+///
+/// The gateway rejects requests without it (`400 MissingSessionID`) and
+/// uses it for routing and prompt caching, so it must not change per
+/// request. A per-process UUID is used unless `OPENCODE_SESSION_ID`
+/// pins a specific value.
+fn opencode_session_id() -> String {
+    session_id_from(std::env::var(OPENCODE_SESSION_ENV).ok())
+}
+
+/// Resolve the session id from an optional override. Split out from
+/// [`opencode_session_id`] because `std::env::set_var` is `unsafe` under
+/// edition 2024, so the override path is tested through this seam.
+fn session_id_from(override_value: Option<String>) -> String {
+    override_value
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string())
+}
+
 /// OpenCode Zen/Go LLM provider.
 ///
 /// Routes through `https://opencode.ai/zen/go/v1` using the OpenAI chat
@@ -33,7 +61,9 @@ impl OpenCodeProvider {
     /// # Errors
     /// Returns a `reqwest::Error` if the HTTP client cannot be built.
     pub fn new(api_key: SecretString, model: impl Into<String>) -> LlmResult<Self> {
-        let inner = OpenAiCompatProvider::new(OPENCODE_ZEN_BASE_URL, Some(api_key), model.into())?;
+        let inner = OpenAiCompatProvider::new(OPENCODE_ZEN_BASE_URL, Some(api_key), model.into())?
+            .with_header("x-opencode-session", opencode_session_id())
+            .with_header("user-agent", OPENCODE_USER_AGENT);
         Ok(Self { inner })
     }
 
@@ -85,5 +115,32 @@ mod tests {
     fn public_constants_point_at_zen_base_url() {
         assert_eq!(OPENCODE_ZEN_BASE_URL, "https://opencode.ai/zen/go/v1");
         assert!(!OPENCODE_DEFAULT_MODEL.is_empty());
+    }
+
+    #[test]
+    fn provider_sends_session_and_user_agent_headers() {
+        let provider = OpenCodeProvider::new(SecretString::from("sk-test"), "model-x").unwrap();
+        let session = provider
+            .inner
+            .header_value("x-opencode-session")
+            .expect("gateway rejects requests without x-opencode-session");
+        assert!(!session.is_empty());
+        assert!(provider
+            .inner
+            .header_value("user-agent")
+            .expect("client must identify itself")
+            .starts_with("ai-memory/"));
+    }
+
+    #[test]
+    fn session_id_override_is_trimmed_and_used() {
+        assert_eq!(session_id_from(Some("  sess-fixed  ".into())), "sess-fixed");
+    }
+
+    #[test]
+    fn session_id_falls_back_to_a_uuid() {
+        let generated = session_id_from(None);
+        assert_eq!(generated.len(), 36);
+        assert_ne!(generated, session_id_from(Some("   ".into())));
     }
 }

@@ -90,6 +90,10 @@ pub struct OpenAiProvider {
     model: String,
     dialect: RequestDialect,
     timeout: Duration,
+    /// Headers attached to every request. Wrappers need them:
+    /// [`crate::OpenCodeProvider`] must send `x-opencode-session`,
+    /// without which the Zen/Go gateway answers 400 `MissingSessionID`.
+    extra_headers: Vec<(String, String)>,
 }
 
 impl OpenAiProvider {
@@ -108,6 +112,7 @@ impl OpenAiProvider {
             model: model.into(),
             dialect: RequestDialect::Official,
             timeout: Duration::from_secs(crate::DEFAULT_REQUEST_TIMEOUT_SECS),
+            extra_headers: Vec::new(),
         })
     }
 
@@ -141,6 +146,34 @@ impl OpenAiProvider {
     pub fn with_dialect(mut self, dialect: RequestDialect) -> Self {
         self.dialect = dialect;
         self
+    }
+
+    /// Attach a header sent with every request. Repeating a name
+    /// replaces the previous value, so a wrapper can override a
+    /// default rather than accumulate duplicates.
+    #[must_use]
+    pub fn with_header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+        let name = name.into();
+        let value = value.into();
+        match self
+            .extra_headers
+            .iter_mut()
+            .find(|(existing, _)| existing.eq_ignore_ascii_case(&name))
+        {
+            Some(slot) => slot.1 = value,
+            None => self.extra_headers.push((name, value)),
+        }
+        self
+    }
+
+    /// Read back a configured extra header. Test-visible so wrapper
+    /// tests (`OpenCodeProvider`) can assert what goes on the wire.
+    #[cfg(test)]
+    pub(crate) fn header_value(&self, name: &str) -> Option<&str> {
+        self.extra_headers
+            .iter()
+            .find(|(existing, _)| existing.eq_ignore_ascii_case(name))
+            .map(|(_, value)| value.as_str())
     }
 }
 
@@ -326,15 +359,16 @@ impl OpenAiProvider {
     async fn post<B: Serialize>(&self, body: &B) -> LlmResult<OpenAiResponse> {
         let url = normalize_openai_base(&self.base_url, "chat/completions");
         debug!(url, "POST openai");
-        let resp = self
+        let mut builder = self
             .client
             .post(&url)
             .timeout(self.timeout)
             .bearer_auth(self.api_key.expose_secret())
-            .header("content-type", "application/json")
-            .json(body)
-            .send()
-            .await?;
+            .header("content-type", "application/json");
+        for (name, value) in &self.extra_headers {
+            builder = builder.header(name.as_str(), value.as_str());
+        }
+        let resp = builder.json(body).send().await?;
         let status = resp.status();
         if !status.is_success() {
             let body = provider_error_body(resp).await;

@@ -99,6 +99,20 @@ impl OpenAiCompatProvider {
         self
     }
 
+    /// Forward an extra request header to the wrapped client. See
+    /// [`OpenAiProvider::with_header`].
+    #[must_use]
+    pub fn with_header(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+        self.inner = self.inner.with_header(name, value);
+        self
+    }
+
+    /// Test-visible read-back of a forwarded header.
+    #[cfg(test)]
+    pub(crate) fn header_value(&self, name: &str) -> Option<&str> {
+        self.inner.header_value(name)
+    }
+
     /// Override the per-request timeout on the wrapped
     /// [`OpenAiProvider`]. The factory calls this with
     /// `ProviderConfig::request_timeout_secs`.

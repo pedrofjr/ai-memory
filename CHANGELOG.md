@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- The OpenCode Zen/Go provider now identifies itself on the wire. Its gateway
+  rejects any request without `x-opencode-session` (`400 MissingSessionID`)
+  and uses that id for routing and prompt caching, so
+  `AI_MEMORY_LLM_PROVIDER=opencode` failed before a single completion —
+  including `ai-memory llm-test --provider opencode`. The id is generated once
+  per provider instance and can be pinned with `OPENCODE_SESSION_ID`, and a
+  `user-agent` of `ai-memory/<version>` now replaces the generic HTTP-library
+  one the gateway asks clients not to send. `OpenAiProvider` gained
+  `with_header`, so a wrapper can attach request headers without forking the
+  client, and `OpenAiCompatProvider` forwards it.
+
 ## [1.32.2] - 2026-08-26
 
 ### Fixed
