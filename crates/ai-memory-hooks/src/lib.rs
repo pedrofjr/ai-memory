@@ -44,13 +44,14 @@ pub use capture_policy::{
     repository_admits_capture,
 };
 pub use payload::{
-    HookEnvelope, HookEvent, NOTIFICATION_EXCERPT_MAX_BYTES, POST_COMPACTION_EXCERPT_MAX_BYTES,
-    USER_PROMPT_EXCERPT_MAX_BYTES, cap_lifecycle_body_for_client,
+    HookEnvelope, HookEvent, HookQuery, NOTIFICATION_EXCERPT_MAX_BYTES,
+    POST_COMPACTION_EXCERPT_MAX_BYTES, USER_PROMPT_EXCERPT_MAX_BYTES,
+    cap_lifecycle_body_for_client,
 };
 pub use router::{
     DEFAULT_HOOK_INGEST_MAX_IN_FLIGHT, DEFAULT_INGEST_GATE_MAX_ENTRIES,
     DEFAULT_PROJECT_CACHE_MAX_ENTRIES, HookState, IngestGates, IngestRateLimiter, ProjectCache,
-    ProjectCacheStore, SubagentSessionSet, SubagentSessions, hook_router,
+    ProjectCacheStore, SubagentSessionSet, SubagentSessions, finalize_session_now, hook_router,
 };
 pub use synth::synthesize_session_page;
 pub use workstream::{WorkstreamState, workstream_router};
