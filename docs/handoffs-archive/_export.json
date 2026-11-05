@@ -1,0 +1,589 @@
+[
+  {
+    "handoff_id": "019edbc6d83879c38e27ffc0200ac827",
+    "state": "open",
+    "created_at": "2026-06-18T17:28:22Z",
+    "created_at_raw": 1781803702328224,
+    "summary": "Session ended; 75 observations recorded.",
+    "open_questions": [],
+    "next_steps": [
+      "Tools used: post-tool-use, pre-tool-use"
+    ],
+    "files_touched": [],
+    "from_agent": "grok",
+    "to_agent": null,
+    "cwd": "C:\\GIT\\utilitarios",
+    "project": "utilitarios",
+    "workspace": "default",
+    "accepted_at": null,
+    "accepted_by": null,
+    "from_session_id_hex": "019edbc57b50744181df1d0959302bb1"
+  },
+  {
+    "handoff_id": "019edbc6cb547f918c2a6404a0bf5221",
+    "state": "open",
+    "created_at": "2026-06-18T17:28:19Z",
+    "created_at_raw": 1781803699028183,
+    "summary": "Session ended; 69 observations recorded.",
+    "open_questions": [],
+    "next_steps": [
+      "Tools used: post-tool-use, pre-tool-use"
+    ],
+    "files_touched": [],
+    "from_agent": "grok",
+    "to_agent": null,
+    "cwd": "C:\\GIT\\utilitarios",
+    "project": "utilitarios",
+    "workspace": "default",
+    "accepted_at": null,
+    "accepted_by": null,
+    "from_session_id_hex": "019edbc57b4e70a198901b300fcadae6"
+  },
+  {
+    "handoff_id": "019edb0e272e7041b1a37c1bcdebdbe3",
+    "state": "open",
+    "created_at": "2026-06-18T14:06:38Z",
+    "created_at_raw": 1781791598382724,
+    "summary": "Session ended; 82 observations recorded.",
+    "open_questions": [],
+    "next_steps": [
+      "Tools used: post-tool-use, pre-tool-use"
+    ],
+    "files_touched": [],
+    "from_agent": "grok",
+    "to_agent": null,
+    "cwd": "C:\\GIT\\utilitarios",
+    "project": "utilitarios",
+    "workspace": "default",
+    "accepted_at": null,
+    "accepted_by": null,
+    "from_session_id_hex": "019edb09d10b7953b0d8b99101b7af2e"
+  },
+  {
+    "handoff_id": "019edb0e26ec7fe1a323d4651d746cdd",
+    "state": "open",
+    "created_at": "2026-06-18T14:06:38Z",
+    "created_at_raw": 1781791598316121,
+    "summary": "Session ended; 109 observations recorded.",
+    "open_questions": [],
+    "next_steps": [
+      "Tools used: post-tool-use, pre-tool-use"
+    ],
+    "files_touched": [],
+    "from_agent": "grok",
+    "to_agent": null,
+    "cwd": "C:\\GIT\\utilitarios",
+    "project": "utilitarios",
+    "workspace": "default",
+    "accepted_at": null,
+    "accepted_by": null,
+    "from_session_id_hex": "019edb09d10d7732ace1cb25aeff2ef1"
+  },
+  {
+    "handoff_id": "019eda944a7071639f82699e8f76d5e5",
+    "state": "open",
+    "created_at": "2026-06-18T11:53:32Z",
+    "created_at_raw": 1781783612016929,
+    "summary": "Started: Tem um .md no diretório em que estamos, o que tem nele?\n\nLast: \"Quer que eu siga com o commit do empacotamento e a atualização do seu opencode.json para apontar para dist/opencode-cp1252.js?\" agora sim, pode fazer",
+    "open_questions": [
+      "Continue from: \"Quer que eu siga com o commit do empacotamento e a atualização do seu opencode.json para apontar para dist/opencode-cp1252.js?\" agora sim, pode fazer"
+    ],
+    "next_steps": [
+      "Tools used: bash, cursor, find, grep, read"
+    ],
+    "files_touched": [],
+    "from_agent": "omp",
+    "to_agent": null,
+    "cwd": "C:\\GIT\\projetos-paralelos\\Opencode_cp1252_plugin",
+    "project": "Opencode_cp1252_plugin",
+    "workspace": "default",
+    "accepted_at": null,
+    "accepted_by": null,
+    "from_session_id_hex": "019ed02fe5eb74358915c20640e61c93"
+  },
+  {
+    "handoff_id": "019ed61315b772618f930f667495c326",
+    "state": "open",
+    "created_at": "2026-06-17T14:53:55Z",
+    "created_at_raw": 1781708035511332,
+    "summary": "Started: Vou ter pedir algo que distoa bastante do projeto, vamos consertar o compile selected do CPB original (`C:\\GIT\\utilitarios\\CPB`). Para começar, consegue identificar por que o commit que introduziu a compilação multi-thread desabilita essa funcionalidade? Algo que o programador que implementou não quis esquentar a cabeça resolvendo?\n\nLast: Puts, perdão, o pedido na real era pra ser: \"Pode fazer um handoff para mim em .md? Vou iniciar outra sessão lá no CPB original para continuar essa tarefa\"",
+    "open_questions": [
+      "Continue from: Puts, perdão, o pedido na real era pra ser: \"Pode fazer um handoff para mim em .md? Vou iniciar outra sessão lá no CPB original para continuar essa tarefa\""
+    ],
+    "next_steps": [
+      "Tools used: bash, cursor, find, grep, read"
+    ],
+    "files_touched": [],
+    "from_agent": "omp",
+    "to_agent": null,
+    "cwd": "C:\\GIT\\projetos-paralelos\\cpb-js",
+    "project": "cpb-js",
+    "workspace": "default",
+    "accepted_at": null,
+    "accepted_by": null,
+    "from_session_id_hex": "019eac674af274d7b24f268e115db62d"
+  },
+  {
+    "handoff_id": "019ed55b56c276729922cb1d03cacee5",
+    "state": "open",
+    "created_at": "2026-06-17T11:33:13Z",
+    "created_at_raw": 1781695993538923,
+    "summary": "Started: tive um b.o, aparentemente minha correçao daquela regressao quebrou todos os outros casos de teste, porem quando fui recolocar os logs, estavam todos quebrados na minha branch backup (`fonte\\DDS-386661\\Rel_TermoHorario-debug.log`), conserte os logs para eu conseguir te fornecer informaçoes em cada teste: b5efcba: chore(DDS-386661): log de debug em Rel_TermoHorario para testes manuais …\nb4527a0: fix: bagunça nas escalas\nae47d0d: docs: explicação desse macarrão todo\na66961f: fix: diff\ndd766fc: TICKET-386661 Adequação do Termo Aditivo de Trabalho para horários com faixa de intervalo …\n684555a: chore(DDS-386661): log de debug em Rel_TermoHorario para testes manuais …\n6d1127b: fix(DDS-386661): descrição consolidada de horário no termo aditivo …\n3949c87: docs: coisas da I.A\nbf5760e: docs: continuidade do ticket\n19f985f: docs(DDS-386661): handoff para continuidade na branch TICKET-386661 …\n6c1abea: docs(DDS-386661): roteiro de teste e prep SQL …\n827eedd: docs(DDS-386661): análise e revisão de complexidade …\n\nLast: Fiz um último teste, só pelos Per=P, olha os logs pra ver se ficou tudo ok?",
+    "open_questions": [
+      "Continue from: Fiz um último teste, só pelos Per=P, olha os logs pra ver se ficou tudo ok?"
+    ],
+    "next_steps": [
+      "Tools used: bash, create_goal, cursor, find, get_goal, grep, read, update_goal"
+    ],
+    "files_touched": [],
+    "from_agent": "omp",
+    "to_agent": null,
+    "cwd": "C:\\GIT\\consisanet",
+    "project": "consisanet",
+    "workspace": "default",
+    "accepted_at": null,
+    "accepted_by": null,
+    "from_session_id_hex": "019e8375411a7ea68cbc02781b3fb04a"
+  },
+  {
+    "handoff_id": "019ed05cbee17292b60132df8c487687",
+    "state": "open",
+    "created_at": "2026-06-16T12:16:39Z",
+    "created_at_raw": 1781612199649424,
+    "summary": "Started: User task:\n\n\nTurn the user task into exactly one durable pi-codex-goal objective, then call the goal creation tool with that objective.\n\nThis prompt invocation is an explicit user request to set a new goal. When the goal creation tool exposes `replace_existing`, pass `replace_existing: true` so an existing active, paused, or budget-limited goal is replaced instead of requiring `/goal clear` first.\n\nDo not set a token budget limit unless the user explicitly provides a budget/limit in the task. If no explicit budget is provided, omit the token budget field entirely.\n\nThe goal must be a completion contract, not a task summary. Preserve the user's full intent. Do not weaken broad acceptance criteria such as \"all\", \"any\", \"complete\", \"no tech debt\", \"do it right\", \"fully\", or \"hard acceptance criteria\".\n\nThe goal must require:\n\n1. Outcome\n   - State what must be true when complete.\n   - Preserve the full requested end state.\n   - Do not narrow scope after the fact unless the original user task explicitly defined that scope.\n\n2. Verification evidence\n   - Name the concrete evidence required before completion.\n   - Include relevant tests, lint, type checks, builds, smoke checks, diffs, docs, generated outputs, rendered UI inspection, or artifact checks when applicable.\n   - If the repo has an existing local CI/validation command, require it unless clearly irrelevant.\n\n3. Constraints\n   - Preserve existing behavior unless the task explicitly changes it.\n   - Do not discard user chang…\n\nLast: \"Alterações estão no working tree, sem commit. Quer que eu faça o commit?\" Faça por favor",
+    "open_questions": [
+      "Continue from: \"Alterações estão no working tree, sem commit. Quer que eu faça o commit?\" Faça por favor"
+    ],
+    "next_steps": [
+      "Tools used: bash, create_goal, cursor, cursor_ask_question, find, get_goal, grep, read, update_goal"
+    ],
+    "files_touched": [],
+    "from_agent": "omp",
+    "to_agent": null,
+    "cwd": "C:\\GIT\\consisanet - Cópia",
+    "project": "consisanet - Cópia",
+    "workspace": "default",
+    "accepted_at": null,
+    "accepted_by": null,
+    "from_session_id_hex": "019eb7f5fda072a398f8a6aa8f88995a"
+  },
+  {
+    "handoff_id": "019ebb9bbc307651999fa65265d9558c",
+    "state": "open",
+    "created_at": "2026-06-12T11:33:26Z",
+    "created_at_raw": 1781264006192090,
+    "summary": "Session ended; 2 observations recorded.",
+    "open_questions": [],
+    "next_steps": [],
+    "files_touched": [],
+    "from_agent": "omp",
+    "to_agent": null,
+    "cwd": "C:\\GIT\\pi-cursor-sdk",
+    "project": "pi-cursor-sdk",
+    "workspace": "default",
+    "accepted_at": null,
+    "accepted_by": null,
+    "from_session_id_hex": "019ebb9b9ef37d1eb949e03677b1f16e"
+  },
+  {
+    "handoff_id": "019e995270a07b619b797f2f1c3fe24e",
+    "state": "open",
+    "created_at": "2026-06-05T19:46:17Z",
+    "created_at_raw": 1780688777376039,
+    "summary": "Started: Carregue o `C:\\GIT\\cpb-refac\\HANDOFF.md` para continuarmos o desenvolvimento\n\nLast: `Quer que eu faça o commit desse  \n fechamento?` SIM",
+    "open_questions": [
+      "Continue from: `Quer que eu faça o commit desse  \n fechamento?` SIM"
+    ],
+    "next_steps": [
+      "Tools used: bash, create_goal, cursor, cursor_ask_question, find, get_goal, grep, read, update_goal"
+    ],
+    "files_touched": [],
+    "from_agent": "omp",
+    "to_agent": null,
+    "cwd": "C:\\GIT\\cpb-refac",
+    "project": "cpb-js",
+    "workspace": "projetos-paralelos",
+    "accepted_at": null,
+    "accepted_by": null,
+    "from_session_id_hex": "019e8d309e7c7e4c8d6e117ea796d605"
+  },
+  {
+    "handoff_id": "019e896f9e6f7f60a3e08be7ff40ad4e",
+    "state": "open",
+    "created_at": "2026-06-02T17:44:14Z",
+    "created_at_raw": 1780422254191813,
+    "summary": "Started: É possível desativa o menu de contexto deste app tauri? Não quero que meu usuário pense que está usando um \"site\"\n\nLast: \"Se quiser, posso aplicar isso direto no projeto\" pode aplicar",
+    "open_questions": [
+      "Continue from: \"Se quiser, posso aplicar isso direto no projeto\" pode aplicar"
+    ],
+    "next_steps": [
+      "Tools used: cursor, find, grep, read"
+    ],
+    "files_touched": [],
+    "from_agent": "omp",
+    "to_agent": null,
+    "cwd": "C:\\GIT\\DBTools",
+    "project": "DBTools",
+    "workspace": "default",
+    "accepted_at": null,
+    "accepted_by": null,
+    "from_session_id_hex": "019e8967d7bd739e88b4b511d6be7b7a"
+  },
+  {
+    "handoff_id": "019e7414ac8479e3a2e21afc0de57c7c",
+    "state": "open",
+    "created_at": "2026-05-29T14:12:52Z",
+    "created_at_raw": 1780063972484071,
+    "summary": "Session focused on: Este projeto foi portado para rust em `tauri-port`, mas agora quero que o projeto principal seja esse em rust, elimine o cdigo legado python, mova o codigo rust para a raiz do diretorio e faça o commit",
+    "open_questions": [
+      "Continue from: Este projeto foi portado para rust em `tauri-port`, mas agora quero que o projeto principal seja esse em rust, elimine o cdigo legado python, mova o codigo rust para a raiz do diretorio e faça o commit"
+    ],
+    "next_steps": [
+      "Tools used: bash, cursor, find, grep, read"
+    ],
+    "files_touched": [],
+    "from_agent": "omp",
+    "to_agent": null,
+    "cwd": "C:\\Users\\pedro.ailton\\Documents\\Projetos Paralelos\\DBTools",
+    "project": "DBTools",
+    "workspace": "default",
+    "accepted_at": null,
+    "accepted_by": null,
+    "from_session_id_hex": "019e740da0a970f185f9a6b96e4df564"
+  },
+  {
+    "handoff_id": "019e73b1dfd27db2bafba04a95dc6217",
+    "state": "open",
+    "created_at": "2026-05-29T12:24:57Z",
+    "created_at_raw": 1780057497554991,
+    "summary": "Configured the user's pi to use the local pi-cursor-sdk checkout (removed npm:pi-cursor-sdk, installed C:/GIT/pi-cursor-sdk). Landed Windows hardening (loopback, signals, paths, error truncation) and always-on stderr diagnostic logs ([pi-cursor-sdk:diag]) to trace MCP incomplete-tool and session issues. User dislikes env-gated logging; PI_CURSOR_DIAGNOSTIC_LOG was removed in favor of always-on diagnostics.",
+    "open_questions": [
+      "Does the user still see 'Cursor MCP did not complete' and huge errors after restart with local extension and always-on diag?",
+      "Should the 3 local commits (ff06cdc, edce53e, f3f6fc0) be pushed to origin?"
+    ],
+    "next_steps": [
+      "User restarts pi against local extension; reproduce long session issue and inspect stderr for incomplete_tool / session_send_plan lines",
+      "Optional: git push main (3 commits ahead of origin) if maintainer wants remote branch updated",
+      "If MCP incomplete persists, correlate diag timestamps with session JSONL and consider agent rebootstrap threshold (20 incremental sends)"
+    ],
+    "files_touched": [
+      "src/cursor-loopback.ts",
+      "src/cursor-diagnostic-log.ts",
+      "src/cursor-pi-tool-bridge-server.ts",
+      "src/cursor-pi-tool-bridge-abort.ts",
+      "src/cursor-session-scope.ts",
+      "src/cursor-provider-errors.ts",
+      "src/cursor-transcript-utils.ts",
+      "src/cursor-mcp-timeout-override.ts",
+      "src/cursor-provider-turn-coordinator.ts",
+      "src/cursor-provider-turn-prepare.ts",
+      "src/cursor-provider-run-finalizer.ts",
+      "src/cursor-sdk-abort-error-guard.ts",
+      "src/cursor-session-compaction-prep.ts",
+      "README.md",
+      "~/.pi/agent/settings.json"
+    ],
+    "from_agent": "other",
+    "to_agent": null,
+    "cwd": null,
+    "project": "composer-api",
+    "workspace": "default",
+    "accepted_at": null,
+    "accepted_by": null,
+    "from_session_id_hex": null
+  },
+  {
+    "handoff_id": "019e7388ae897c828c775ff67db12865",
+    "state": "open",
+    "created_at": "2026-05-29T11:39:57Z",
+    "created_at_raw": 1780054797961239,
+    "summary": "Session focused on: Carregue o handoff do diretório",
+    "open_questions": [
+      "Continue from: Carregue o handoff do diretório"
+    ],
+    "next_steps": [
+      "Tools used: cursor, read"
+    ],
+    "files_touched": [],
+    "from_agent": "omp",
+    "to_agent": null,
+    "cwd": "C:\\GIT\\composer-api",
+    "project": "composer-api",
+    "workspace": "default",
+    "accepted_at": null,
+    "accepted_by": null,
+    "from_session_id_hex": "019e73698fd67e1bb24b73997f42793f"
+  },
+  {
+    "handoff_id": "019e7368ffe07dd385ea2cddf285895b",
+    "state": "open",
+    "created_at": "2026-05-29T11:05:21Z",
+    "created_at_raw": 1780052721632018,
+    "summary": "Usuário pediu memória do diretório C:\\GIT\\composer-api (não da sessão de chat). Consulta ao ai-memory: 1 página wiki (ticket Delphi DDS-351421), 126 observações sem consolidar, zero páginas sobre Composer API. Handoff anterior (meta/gravar sessão) foi consumido. Oferecido gravar concepts/composer-api-workspace.md; usuário pediu handoff.",
+    "open_questions": [
+      "Gravar página durável concepts/composer-api-workspace.md no ai-memory com README + estrutura do repo?",
+      "Continuar trabalho no Composer API ou retomar ticket DDS-351421 (Delphi C175/M410)?"
+    ],
+    "next_steps": [
+      "Se próximo agente for Composer API: ler README.md, worker/index.ts, AGENTS.md; considerar memory_write_page para concepts/composer-api-workspace.md.",
+      "Se for DDS-351421: memory_query ou tickets/DDS-351421-correcao-c175-m410.md.",
+      "Responder 'onde paramos' a partir deste handoff; memory_handoff_accept retorna null (single-use)."
+    ],
+    "files_touched": [
+      "README.md",
+      "AGENTS.md"
+    ],
+    "from_agent": "other",
+    "to_agent": null,
+    "cwd": null,
+    "project": "composer-api",
+    "workspace": "default",
+    "accepted_at": null,
+    "accepted_by": null,
+    "from_session_id_hex": null
+  },
+  {
+    "handoff_id": "019e7366abe07c608ec9f93b54f046c8",
+    "state": "open",
+    "created_at": "2026-05-29T11:02:49Z",
+    "created_at_raw": 1780052569056578,
+    "summary": "Sessão organizou ~46 ficheiros alterados em 6 commits na branch `fork` (hooks Windows/Cursor, OpenCode session-end, docs e script de auditoria SQLite). Testes `ai-memory-hooks` e `render_shared` passaram. Ficou por commitar `.cursor/session-note-2026-05-28.md` (nota local).",
+    "open_questions": [
+      "Versionar ou ignorar `.cursor/session-note-2026-05-28.md`?"
+    ],
+    "next_steps": [
+      "Fazer `git push origin fork` quando quiser publicar os 6 commits",
+      "Após rebuild: `ai-memory install-hooks --agent cursor --apply` (e opencode) para regenerar hooks.json com run-hook.ps1",
+      "Validar captura com `AI_MEMORY_HOOK_DEBUG=1` e `scripts/windows/hook-observations-audit.py`",
+      "Usar `scripts/windows/cursor-agent.ps1` no CLI se session-end não disparar no /quit"
+    ],
+    "files_touched": [
+      "crates/ai-memory-hooks/src/payload.rs",
+      "crates/ai-memory-cli/src/commands/render_shared.rs",
+      "crates/ai-memory-cli/src/commands/install_hooks.rs",
+      "hooks/lib/run-hook.ps1",
+      "hooks/lib/ai-memory-hook.ps1",
+      "hooks/cursor/session-flush.ps1",
+      "scripts/windows/cursor-agent.ps1",
+      "scripts/windows/hook-observations-audit.py",
+      "docs/investigations/handoff-cursor-opencode-hooks-windows.md",
+      "CHANGELOG.md",
+      "docs/mcp-install.md",
+      "scripts/windows/README.md"
+    ],
+    "from_agent": "other",
+    "to_agent": null,
+    "cwd": null,
+    "project": "ai-memory",
+    "workspace": "default",
+    "accepted_at": null,
+    "accepted_by": null,
+    "from_session_id_hex": null
+  },
+  {
+    "handoff_id": "019e70484fac7f40b31c9771d24447f1",
+    "state": "open",
+    "created_at": "2026-05-28T20:30:47Z",
+    "created_at_raw": 1780000247724166,
+    "summary": "DDS-257957 concluído: fix 5830e85 bloqueia recontabilização fiscal de NF com prévia (ST_EMISSAOPREVIANF=S). Teste manual validado com massa emp 3/1 e prep SQL; roteiro enxuto e padrão gravados na ai-memory (repo pode apagar ROTEIRO-TESTE.md).",
+    "open_questions": [
+      "ROTEIRO-TESTE.md ainda no repo ou já removido?",
+      "Teste com fix formalmente registrado pelo usuário?"
+    ],
+    "next_steps": [
+      "Recuperar roteiro: memory_query DDS-257957 roteiro ou path procedural/tickets/DDS-257957/ROTEIRO-TESTE.md",
+      "Recuperar sessão: sessions/DDS-257957-2026-05-28.md",
+      "Teste com fix: checkpoint + BPL com fix, cenário B só NF1, diário 3322 deve ficar 400",
+      "Push/PR se usuário pedir"
+    ],
+    "files_touched": [
+      "fonte/consisanet/fiscal/P_LivFiscalMovOut/Cad_LivRecontabiliza.pas",
+      "fonte/consisanet/fiscal/P_LivFiscalMovOut/Cad_LivRecontabiliza.dfm",
+      "testes/_build/prep-dds-257957.sql",
+      "testes/_build/prep-dds-257957.ps1",
+      "documentacao/documentos/sgrh/tickets/DDS-257957/ROTEIRO-TESTE.md"
+    ],
+    "from_agent": "other",
+    "to_agent": null,
+    "cwd": null,
+    "project": "Pictures",
+    "workspace": "default",
+    "accepted_at": null,
+    "accepted_by": null,
+    "from_session_id_hex": null
+  },
+  {
+    "handoff_id": "019e7044be627d009fe71b1a010e07af",
+    "state": "open",
+    "created_at": "2026-05-28T20:26:53Z",
+    "created_at_raw": 1780000013922238,
+    "summary": "Started: Consegue ler as 2 imagens deste diretório?\n\nLast: Cara, tu alucinou completamente, tem certeza que consegue ver as imagens?",
+    "open_questions": [
+      "Continue from: Cara, tu alucinou completamente, tem certeza que consegue ver as imagens?"
+    ],
+    "next_steps": [
+      "Tools used: bash, eval, find, read, search"
+    ],
+    "files_touched": [],
+    "from_agent": "omp",
+    "to_agent": null,
+    "cwd": "C:\\Users\\pedro.ailton\\Pictures",
+    "project": "Pictures",
+    "workspace": "default",
+    "accepted_at": null,
+    "accepted_by": null,
+    "from_session_id_hex": "019e7041f1d77000a59f764699e89f14"
+  },
+  {
+    "handoff_id": "019e703fc77b7db2bbb3ae0def547cd0",
+    "state": "open",
+    "created_at": "2026-05-28T20:21:28Z",
+    "created_at_raw": 1779999688571701,
+    "summary": "Started: C:\\Users\\pedro.ailton\\Pictures\\baixados.png consegue ver imagens como esta?\n\nLast: Me referia a  ~\\Pictures\\Captura de tela 2026-05-27 172939.png",
+    "open_questions": [
+      "Continue from: Me referia a  ~\\Pictures\\Captura de tela 2026-05-27 172939.png"
+    ],
+    "next_steps": [
+      "Tools used: bash, find, mcp__ai_memory_memory_query, read, search"
+    ],
+    "files_touched": [],
+    "from_agent": "omp",
+    "to_agent": null,
+    "cwd": "C:\\Users\\PEDRO~1.AIL\\AppData\\Local\\Temp",
+    "project": "Temp",
+    "workspace": "default",
+    "accepted_at": null,
+    "accepted_by": null,
+    "from_session_id_hex": "019e703ba972700092469ffeebc0b9d8"
+  },
+  {
+    "handoff_id": "019e7036834c7910abaeb013a77ea799",
+    "state": "open",
+    "created_at": "2026-05-28T20:11:21Z",
+    "created_at_raw": 1779999081292985,
+    "summary": "composer-api Windows local OpenCode: use /opencodev2/v1 and composer-2.5-sdk. Three commits on main (fix worker, feat dev:local runner, docs README). Run npm run dev:local; stop with dev:local:stop. HANDOFF.md untracked locally. Push pending. See wiki notes/composer-api-local-dev.md.",
+    "open_questions": [],
+    "next_steps": [],
+    "files_touched": [],
+    "from_agent": "other",
+    "to_agent": null,
+    "cwd": null,
+    "project": "ai-memory",
+    "workspace": "default",
+    "accepted_at": null,
+    "accepted_by": null,
+    "from_session_id_hex": null
+  },
+  {
+    "handoff_id": "019e7035c9cd7d238e2a98ed081c6c9e",
+    "state": "open",
+    "created_at": "2026-05-28T20:10:33Z",
+    "created_at_raw": 1779999033805797,
+    "summary": "composer-api session: local OpenCode via opencodev2 works. Three commits on main. dev-local runner added.",
+    "open_questions": [],
+    "next_steps": [],
+    "files_touched": [],
+    "from_agent": "other",
+    "to_agent": null,
+    "cwd": null,
+    "project": "ai-memory",
+    "workspace": "default",
+    "accepted_at": null,
+    "accepted_by": null,
+    "from_session_id_hex": null
+  },
+  {
+    "handoff_id": "019e703023c27e608bc3d57d31e9a0b0",
+    "state": "open",
+    "created_at": "2026-05-28T20:04:23Z",
+    "created_at_raw": 1779998663618434,
+    "summary": "Sessao Cursor sobre ai-memory (fork): sinapses/V13 commitados; hooks Windows com run-hook.ps1; OMP configurado em ~/.omp; OpenCode captura tools+session-end; Cursor agent ainda sem hooks utiles.",
+    "open_questions": [
+      "Cursor agent no terminal ainda nao dispara hooks com payload (so lifecycle vazio)?",
+      "Reaplicar install-hooks cursor apos build e validar hook-trace payload_len>0 no IDE?",
+      "Consolidate manual nesta sessao Cursor teve observacoes suficientes?"
+    ],
+    "next_steps": [
+      "Continuar trabalho no branch fork ou merge conforme plano",
+      "Para memoria plena: usar OMP (ou OpenCode); Cursor so MCP on-demand ate hooks CLI/IDE",
+      "Rodar hook-observations-audit.py apos sessoes OMP",
+      "Se fechar OMP: session-end + consolidate opt-in ja funcionam (log triplo e normal)"
+    ],
+    "files_touched": [
+      "hooks/lib/run-hook.ps1",
+      "hooks/lib/ai-memory-hook.ps1",
+      "crates/ai-memory-cli/src/commands/render_shared.rs",
+      "crates/ai-memory-cli/src/commands/install_hooks.rs",
+      "scripts/windows/cursor-agent.ps1",
+      "scripts/windows/hook-observations-audit.py",
+      "CHANGELOG.md",
+      "scripts/windows/README.md"
+    ],
+    "from_agent": "other",
+    "to_agent": null,
+    "cwd": null,
+    "project": "Temp",
+    "workspace": "default",
+    "accepted_at": null,
+    "accepted_by": null,
+    "from_session_id_hex": null
+  },
+  {
+    "handoff_id": "019e6ed17df07e11bf47423c806de04e",
+    "state": "open",
+    "created_at": "2026-05-28T13:41:23Z",
+    "created_at_raw": 1779975683569019,
+    "summary": "DDS-351421/CDG-3776: correção em duas camadas após regressão do testador — C175 no arquivo SPED deve permanecer consolidado (chave CFOP/CST/alíquota/conta); M410/M810 na apuração devem discriminar natureza (Tab C/I → 103/104). Revertido índice de agregação em DM_EPCC175; M400/M800 para modelo 65 passam a vir do livro (QLivFiscalProdServItem + atribuirDadosC100_M400M800FromLivro). Rel_LivMovimentoTributo do commit 98648151cb permanece. Build/validação SPED ainda não confirmados nesta sessão.",
+    "open_questions": [
+      "Compilação CPB dos pacotes EPCDigitalC, EPCDigitalTab e EPCDigitalApuracao passou sem erro?",
+      "Validador SPED: NF 7081 (emp 98, maio/2025) — 1 linha C175 CST 06 VL 56, sem duplicidade linhas 43–44?",
+      "Apuração M410: 103=6 e 104=50 (106=250 se aplicável)?",
+      "Alterações em .pas/.dfm estão commitadas ou só em working tree de outro checkout?"
+    ],
+    "next_steps": [
+      "Recompilar EPCDigitalC → EPCDigitalTab → EPCDigitalApuracao (e EPCDigital00 se necessário)",
+      "Regenerar arquivo SPED Contribuições (não só Gerar Apuração em arquivo antigo)",
+      "Rodar validador SPED + conferir M410 na apuração com NF 7081",
+      "Se OK: commit com mensagem focada no porquê (C175 consolidado + M400/M800 por natureza no livro)",
+      "Opcional: atualizar documentacao/tickets/DDS-351421 com resultado dos testes"
+    ],
+    "files_touched": [
+      "fonte/consisanet/arqdigital/EPCDigital/P_EPCDigitalC/DM_EPCC175.pas",
+      "fonte/consisanet/arqdigital/EPCDigital/P_EPCDigitalApuracao/DM_LivApuPCAtribuicaoDadosBlocoC.pas",
+      "fonte/consisanet/arqdigital/EPCDigital/P_EPCDigitalTab/DM_LivApuPCTabEdicao.pas",
+      "fonte/consisanet/arqdigital/EPCDigital/P_EPCDigitalTab/DM_LivApuPCTabEdicao.dfm",
+      "fonte/consisanet/fiscal/P_LIVRel/Rel_LivMovimentoTributo.pas",
+      ".gitignore"
+    ],
+    "from_agent": "other",
+    "to_agent": null,
+    "cwd": "c:\\GIT\\consisanet",
+    "project": "consisanet",
+    "workspace": "default",
+    "accepted_at": null,
+    "accepted_by": null,
+    "from_session_id_hex": null
+  },
+  {
+    "handoff_id": "019e6e8544947a3296a1e2d098647332",
+    "state": "open",
+    "created_at": "2026-05-28T12:18:08Z",
+    "created_at_raw": 1779970688148368,
+    "summary": "Session focused on: Clonei 2 projetos de plugin do Cursor e o projeto do Codex neste diretório para você investigar uma coisa para mim: É possível fazer a feature /goal do Codex no Cursor via plugins?",
+    "open_questions": [
+      "Continue from: Clonei 2 projetos de plugin do Cursor e o projeto do Codex neste diretório para você investigar uma coisa para mim: É possível fazer a feature /goal do Codex no Cursor via plugins?"
+    ],
+    "next_steps": [
+      "Tools used: bash, cursor, find, grep, read"
+    ],
+    "files_touched": [],
+    "from_agent": "omp",
+    "to_agent": null,
+    "cwd": "C:\\GIT\\Goal",
+    "project": "Goal",
+    "workspace": "default",
+    "accepted_at": null,
+    "accepted_by": null,
+    "from_session_id_hex": "019e6e74b7c87d789e5cf294706830f7"
+  }
+]
