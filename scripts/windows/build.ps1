@@ -4,8 +4,7 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Set-Location $RepoRoot
 
-# $env:TAILWIND_SKIP = "1"
-$env:TAILWIND_SKIP = "0"
+$env:TAILWIND_SKIP = "1"
 $BridgeDir = Join-Path $RepoRoot "scripts\cursor-bridge"
 if (-not (Test-Path "$BridgeDir\node_modules\@cursor\sdk")) {
     Write-Host "Installing cursor-bridge npm deps (first time)..." -ForegroundColor Yellow
