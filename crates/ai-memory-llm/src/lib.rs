@@ -76,6 +76,7 @@ pub use factory::{
     EmbedderChoice, EmbedderConfig, ProviderChoice, ProviderConfig, build_embedder, build_provider,
     default_embedding_dim, try_default_embedding_dim,
 };
+pub use text::{DEFAULT_EMBEDDING_MAX_BYTES, truncate_for_embedding};
 pub use gemini::GeminiProvider;
 pub use health::{
     ProviderHealth, ProviderHealthSnapshot, ProviderHealthStatus, ProviderRoleHealthSnapshot,

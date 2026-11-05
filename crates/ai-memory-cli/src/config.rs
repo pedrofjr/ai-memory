@@ -208,6 +208,10 @@ pub struct Config {
     pub embedding_dim: Option<u32>,
     /// Optional embedding base URL override.
     pub embedding_base_url: Option<String>,
+    /// Optional per-request embedding input cap in bytes (default 8000).
+    /// Larger context embedding models can raise it via
+    /// `AI_MEMORY_EMBEDDING_MAX_BYTES`.
+    pub embedding_max_bytes: Option<u32>,
     /// M8 retention-sweep parameters. The defaults give an ~80-day
     /// "survival floor" for unused episodic content (above the cold
     /// threshold), followed by ~180 days of tombstone grace before permanent
@@ -594,6 +598,7 @@ impl Default for Config {
             embedding_model: None,
             embedding_dim: None,
             embedding_base_url: None,
+            embedding_max_bytes: None,
             decay: DecaySettings::default(),
             maintenance: MaintenanceSettings::default(),
             slots: SlotSettings::default(),
@@ -1173,12 +1178,17 @@ impl Config {
                 "AI_MEMORY_EMBEDDING_BASE_URL required for openai-compat embeddings".into(),
             ));
         }
+        let max_input_bytes = self
+            .embedding_max_bytes
+            .map(|n| n as usize)
+            .unwrap_or(ai_memory_llm::DEFAULT_EMBEDDING_MAX_BYTES);
         Ok(Some(EmbedderConfig {
             provider,
             model,
             dim,
             api_key,
             base_url,
+            max_input_bytes,
         }))
     }
 

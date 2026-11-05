@@ -22,6 +22,8 @@
 *.swo
 .idea/
 .vscode/
+terminals/
+**/__pycache__/
 
 # Local debugging.
 *.log

@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use tracing::debug;
 
 use crate::embedding::{Embedder, normalise};
+use crate::text::truncate_for_embedding;
 use crate::error::{LlmError, LlmResult};
 use crate::response::{provider_error_body, response_json_limited};
 
@@ -27,6 +28,7 @@ pub struct GoogleEmbedder {
     /// Wire model id, e.g. `models/gemini-embedding-001`.
     model: String,
     dim: u32,
+    max_input_bytes: usize,
     /// True when the model id contains `embedding-2` (task prefixes in text).
     embedding_v2: bool,
 }
@@ -36,7 +38,12 @@ impl GoogleEmbedder {
     ///
     /// # Errors
     /// Propagates HTTP client construction errors.
-    pub fn new(api_key: SecretString, model: impl Into<String>, dim: u32) -> LlmResult<Self> {
+    pub fn new(
+        api_key: SecretString,
+        model: impl Into<String>,
+        dim: u32,
+        max_input_bytes: usize,
+    ) -> LlmResult<Self> {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(120))
             .build()?;
@@ -48,6 +55,7 @@ impl GoogleEmbedder {
             base_url: DEFAULT_BASE_URL.into(),
             model,
             dim,
+            max_input_bytes,
             embedding_v2,
         })
     }
@@ -64,14 +72,15 @@ impl GoogleEmbedder {
         text: &str,
         task_type: Option<&'static str>,
     ) -> LlmResult<Vec<f32>> {
+        let truncated = truncate_for_embedding(text, self.max_input_bytes);
         let prepared = if self.embedding_v2 {
             match task_type {
-                Some("RETRIEVAL_DOCUMENT") => format_document_v2(text),
-                Some("RETRIEVAL_QUERY") => format_query_v2(text),
-                _ => text.to_string(),
+                Some("RETRIEVAL_DOCUMENT") => format_document_v2(&truncated),
+                Some("RETRIEVAL_QUERY") => format_query_v2(&truncated),
+                _ => truncated,
             }
         } else {
-            text.to_string()
+            truncated
         };
 
         let url = embed_url(&self.base_url, &self.model);
@@ -268,7 +277,12 @@ mod tests {
             .await;
 
         let embedder =
-            GoogleEmbedder::new(SecretString::from("test-key"), "gemini-embedding-001", 3)
+            GoogleEmbedder::new(
+                SecretString::from("test-key"),
+                "gemini-embedding-001",
+                3,
+                crate::DEFAULT_EMBEDDING_MAX_BYTES,
+            )
                 .expect("google embedder builds")
                 .with_base_url(server.uri());
 

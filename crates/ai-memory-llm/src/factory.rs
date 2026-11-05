@@ -164,6 +164,8 @@ pub struct EmbedderConfig {
     pub api_key: SecretString,
     /// Optional base URL override. Required for openai-compat.
     pub base_url: Option<String>,
+    /// Per-request input byte cap before calling the provider.
+    pub max_input_bytes: usize,
 }
 
 /// Construct an `Arc<dyn Embedder>` from the config.
@@ -179,21 +181,36 @@ pub fn build_embedder(config: EmbedderConfig) -> LlmResult<Arc<dyn Embedder>> {
     }
     let arc: Arc<dyn Embedder> = match config.provider {
         EmbedderChoice::OpenAi => {
-            let mut e = OpenAiEmbedder::new(config.api_key, config.model, config.dim)?;
+            let mut e = OpenAiEmbedder::new(
+                config.api_key,
+                config.model,
+                config.dim,
+                config.max_input_bytes,
+            )?;
             if let Some(url) = config.base_url {
                 e = e.with_base_url(url);
             }
             Arc::new(e)
         }
         EmbedderChoice::Voyage => {
-            let mut e = VoyageEmbedder::new(config.api_key, config.model, config.dim)?;
+            let mut e = VoyageEmbedder::new(
+                config.api_key,
+                config.model,
+                config.dim,
+                config.max_input_bytes,
+            )?;
             if let Some(url) = config.base_url {
                 e = e.with_base_url(url);
             }
             Arc::new(e)
         }
         EmbedderChoice::Google => {
-            let mut e = GoogleEmbedder::new(config.api_key, config.model, config.dim)?;
+            let mut e = GoogleEmbedder::new(
+                config.api_key,
+                config.model,
+                config.dim,
+                config.max_input_bytes,
+            )?;
             if let Some(url) = config.base_url {
                 e = e.with_base_url(url);
             }
@@ -209,6 +226,7 @@ pub fn build_embedder(config: EmbedderConfig) -> LlmResult<Arc<dyn Embedder>> {
                 api_key,
                 config.model,
                 config.dim,
+                config.max_input_bytes,
             )?)
         }
     };
