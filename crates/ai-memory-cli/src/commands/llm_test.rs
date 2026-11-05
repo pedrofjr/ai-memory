@@ -40,6 +40,7 @@ pub async fn run(config: &Config, args: LlmTestArgs) -> Result<()> {
             .map(str::trim)
             .filter(|s| !s.is_empty())
             .map(str::to_string),
+        opencode_session_id: config.opencode_session_id(),
     };
     let client = build_provider(provider_config).context("building LLM provider")?;
     info!(

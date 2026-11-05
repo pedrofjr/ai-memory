@@ -23,24 +23,15 @@ pub const OPENCODE_DEFAULT_MODEL: &str = "claude-sonnet-4-6";
 /// library agent.
 const OPENCODE_USER_AGENT: &str = concat!("ai-memory/", env!("CARGO_PKG_VERSION"));
 
-/// Optional override for the routing session id.
-const OPENCODE_SESSION_ENV: &str = "OPENCODE_SESSION_ID";
-
-/// Stable id sent as `x-opencode-session`.
+/// Resolve the routing session id sent as `x-opencode-session`.
 ///
 /// The gateway rejects requests without it (`400 MissingSessionID`) and
 /// uses it for routing and prompt caching, so it must not change per
-/// request. A per-process UUID is used unless `OPENCODE_SESSION_ID`
-/// pins a specific value.
-fn opencode_session_id() -> String {
-    session_id_from(std::env::var(OPENCODE_SESSION_ENV).ok())
-}
-
-/// Resolve the session id from an optional override. Split out from
-/// [`opencode_session_id`] because `std::env::set_var` is `unsafe` under
-/// edition 2024, so the override path is tested through this seam.
-fn session_id_from(override_value: Option<String>) -> String {
-    override_value
+/// request. `Config::load` sources the optional pin from
+/// `OPENCODE_SESSION_ID`; without one the provider generates a UUID when
+/// it is constructed.
+fn session_id_from(pinned: Option<String>) -> String {
+    pinned
         .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
         .unwrap_or_else(|| uuid::Uuid::new_v4().to_string())
@@ -62,9 +53,20 @@ impl OpenCodeProvider {
     /// Returns a `reqwest::Error` if the HTTP client cannot be built.
     pub fn new(api_key: SecretString, model: impl Into<String>) -> LlmResult<Self> {
         let inner = OpenAiCompatProvider::new(OPENCODE_ZEN_BASE_URL, Some(api_key), model.into())?
-            .with_header("x-opencode-session", opencode_session_id())
+            .with_header("x-opencode-session", session_id_from(None))
             .with_header("user-agent", OPENCODE_USER_AGENT);
         Ok(Self { inner })
+    }
+
+    /// Pin the routing session id sent as `x-opencode-session`. The factory
+    /// passes `ProviderConfig::opencode_session_id`, which `Config::load`
+    /// sources once from `OPENCODE_SESSION_ID`; a blank value falls back to a
+    /// generated id.
+    #[must_use]
+    pub fn with_session_id(mut self, session_id: impl Into<String>) -> Self {
+        let session_id = session_id_from(Some(session_id.into()));
+        self.inner = self.inner.with_header("x-opencode-session", session_id);
+        self
     }
 
     /// Override the per-request timeout on the wrapped
@@ -125,11 +127,13 @@ mod tests {
             .header_value("x-opencode-session")
             .expect("gateway rejects requests without x-opencode-session");
         assert!(!session.is_empty());
-        assert!(provider
-            .inner
-            .header_value("user-agent")
-            .expect("client must identify itself")
-            .starts_with("ai-memory/"));
+        assert!(
+            provider
+                .inner
+                .header_value("user-agent")
+                .expect("client must identify itself")
+                .starts_with("ai-memory/")
+        );
     }
 
     #[test]
@@ -142,5 +146,28 @@ mod tests {
         let generated = session_id_from(None);
         assert_eq!(generated.len(), 36);
         assert_ne!(generated, session_id_from(Some("   ".into())));
+    }
+
+    #[test]
+    fn pinned_session_id_replaces_the_generated_one() {
+        let provider = OpenCodeProvider::new(SecretString::from("sk-test"), "model-x")
+            .unwrap()
+            .with_session_id("  sess-pinned  ");
+        assert_eq!(
+            provider.inner.header_value("x-opencode-session"),
+            Some("sess-pinned")
+        );
+    }
+
+    #[test]
+    fn blank_pinned_session_id_falls_back_to_a_uuid() {
+        let provider = OpenCodeProvider::new(SecretString::from("sk-test"), "model-x")
+            .unwrap()
+            .with_session_id("   ");
+        let session = provider
+            .inner
+            .header_value("x-opencode-session")
+            .expect("a blank pin must still produce a session id");
+        assert_eq!(session.len(), 36);
     }
 }

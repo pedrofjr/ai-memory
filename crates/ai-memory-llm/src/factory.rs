@@ -121,6 +121,10 @@ pub struct ProviderConfig {
     pub cursor_model_fast: bool,
     /// Cursor bridge: optional effort param (`low` / `medium` / `high` for Grok).
     pub cursor_model_effort: Option<String>,
+    /// OpenCode Zen/Go: routing session id sent as `x-opencode-session`.
+    /// Sourced once from `OPENCODE_SESSION_ID` by `Config::load`; when absent
+    /// the provider generates one per instance.
+    pub opencode_session_id: Option<String>,
 }
 
 /// Embedding providers available to ai-memory.
@@ -322,9 +326,11 @@ pub fn build_provider(config: ProviderConfig) -> LlmResult<Arc<dyn LlmProvider>>
         }
         ProviderChoice::OpenCode => {
             let key = config.auth.require_api_key()?;
-            Ok(Arc::new(
-                OpenCodeProvider::new(key, config.model)?.with_timeout_secs(timeout),
-            ))
+            let mut provider = OpenCodeProvider::new(key, config.model)?;
+            if let Some(session_id) = config.opencode_session_id {
+                provider = provider.with_session_id(session_id);
+            }
+            Ok(Arc::new(provider.with_timeout_secs(timeout)))
         }
         ProviderChoice::Cursor => {
             let key = config.auth.require_api_key()?;
@@ -423,6 +429,7 @@ mod tests {
             cursor_timeout_ms: 120_000,
             cursor_model_fast: false,
             cursor_model_effort: None,
+            opencode_session_id: None,
         };
 
         let err = match build_provider(cfg) {

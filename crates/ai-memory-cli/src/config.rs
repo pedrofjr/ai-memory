@@ -323,6 +323,7 @@ pub struct RuntimeEnv {
     copilot_client_id: Option<String>,
     voyage_api_key: Option<SecretString>,
     opencode_api_key: Option<SecretString>,
+    opencode_session_id: Option<String>,
     pub cursor_api_key: Option<SecretString>,
     pub cursor_agent_cwd: Option<String>,
     pub cursor_timeout_ms: Option<u64>,
@@ -367,6 +368,9 @@ impl RuntimeEnv {
             copilot_client_id: env_string("AI_MEMORY_COPILOT_CLIENT_ID"),
             voyage_api_key: env_secret("VOYAGE_API_KEY"),
             opencode_api_key: env_secret("OPENCODE_API_KEY"),
+            // Pins the routing id the Zen/Go gateway requires; captured here
+            // so the provider never reads the environment itself.
+            opencode_session_id: env_string("OPENCODE_SESSION_ID"),
             cursor_api_key: env_secret("CURSOR_API_KEY"),
             cursor_agent_cwd: env_string("CURSOR_AGENT_CWD"),
             cursor_timeout_ms: env_u64("CURSOR_TIMEOUT_MS"),
@@ -1057,7 +1061,15 @@ impl Config {
             cursor_timeout_ms,
             cursor_model_fast,
             cursor_model_effort,
+            opencode_session_id: self.opencode_session_id(),
         }))
+    }
+
+    /// OpenCode Zen/Go routing session id sent as `x-opencode-session`.
+    /// Trimmed, so a blank `OPENCODE_SESSION_ID` counts as unset and the
+    /// provider generates one per instance instead.
+    pub(crate) fn opencode_session_id(&self) -> Option<String> {
+        non_empty(self.runtime_env.opencode_session_id.as_deref()).map(str::to_string)
     }
 
     /// Working directory handed to the Cursor agent bridge. Explicit
@@ -1571,6 +1583,20 @@ mod tests {
             error.to_string().contains("llm_timeout_secs"),
             "unexpected error: {error:#}"
         );
+    }
+
+    /// The Zen/Go gateway rejects requests without `x-opencode-session`, and
+    /// the pin is captured once by `Config::load` so the provider never reads
+    /// the environment itself (config-read-path invariant).
+    #[test]
+    fn opencode_session_id_is_trimmed_and_blank_counts_as_unset() {
+        let mut cfg = Config::default();
+        cfg.runtime_env.opencode_session_id = Some("  sess-1  ".into());
+        assert_eq!(cfg.opencode_session_id().as_deref(), Some("sess-1"));
+        cfg.runtime_env.opencode_session_id = Some("   ".into());
+        assert_eq!(cfg.opencode_session_id(), None);
+        cfg.runtime_env.opencode_session_id = None;
+        assert_eq!(cfg.opencode_session_id(), None);
     }
 
     #[test]
