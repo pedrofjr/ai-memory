@@ -183,8 +183,41 @@ pi --model cursor/composer-2.5
 
 Reinicie o pi após mudar extensões. Para UI web: `ai-memory serve --transport http --enable-web`.
 
-## CLI direto
+## OMP (Oh My Pi)
 
+O **OMP** usa `~/.omp/agent/` nativamente (MCP, extensões, `models.json`, `config.yml`).
+
+### Snapcompact + modelos Cursor (Composer)
+
+O OMP descobre modelos Cursor com `"input": ["text"]` no cache `models.db`. O **snapcompact** exige visão (`image`). A correção oficial do OMP é **`modelOverrides` em `~/.omp/agent/models.json`** — reaplicado a cada boot/refresh; **não edite `models.db`**.
+
+```powershell
+cd C:\GIT\ai-memory
+.\scripts\windows\install-omp.ps1
+```
+
+Reaplique após `bun update -g @oh-my-pi/pi-coding-agent` ou se `models.json` for apagado.
+
+| Camada | OMP |
+|--------|-----|
+| Captura | `~/.omp/agent/extensions/ai-memory.ts` |
+| MCP | `~/.omp/agent/mcp.json` |
+| Regras Cursor | OMP carrega `~/.cursor/rules/*.mdc` nativamente |
+| Skills | junction `~/.omp/agent/skills` → `~/.cursor/skills` |
+| Snapcompact | `models.json` → `providers.cursor.modelOverrides` |
+
+Cria/atualiza: extensão ai-memory, MCP (incl. firebird via node), skills junction, bloco ai-memory em AGENTS.md, overrides Composer, regras grep/glob, `.env` com timeout de stream.
+
+### Troubleshooting OMP
+
+| Sintoma | Causa | Mitigação |
+|---------|-------|-----------|
+| `Pattern must not be empty` | `grep` chamado sem `pattern` | Use `glob` para listar arquivos; regra em `AGENTS.md` (`omp-agent-rules`) |
+| `Provider stream stalled…` | Timeout 120s sem evento no stream Cursor | `~/.omp/agent/.env` → `PI_STREAM_IDLE_TIMEOUT_MS=600000` (aplicado por `install-omp.ps1`) |
+| `MCP firebird: Transport closed` | Bug OMP Windows: spawn `npx` via `cmd.exe` corrompe caminhos (`\nodejs`) | `install-omp.ps1` usa `node` + `cli.js` com `/` (OpenCode não usa esse wrapper) |
+| `/compact` falha com text-only | Falta `modelOverrides` | Reaplique `install-omp.ps1` |
+
+## CLI direto
 ```powershell
 $env:TAILWIND_SKIP = "1"
 .\target\release\ai-memory.exe status --json
