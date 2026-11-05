@@ -51,6 +51,18 @@ Instala em `%USERPROFILE%\.local\bin\` e carrega o `.env` da raiz do clone (+ `.
 
 Override do repo: `$env:AI_MEMORY_REPO = "D:\outro\ai-memory"`
 
+## Servidor no logon (tarefa agendada)
+
+```powershell
+.\scripts\windows\install-serve-autostart.ps1
+```
+
+Registra a tarefa `ai-memory-serve` com gatilho "ao fazer logon", roda `serve.ps1 -Web` em janela oculta e já dispara a tarefa no fim. Roda como `Limited`, reinicia a cada minuto (até 3 tentativas) e não tem limite de execução. Reexecutar re-registra.
+
+O Agendador de Tarefas não consegue iniciar o alias MSIX de `%LOCALAPPDATA%\Microsoft\WindowsApps` (é um stub/reparse point): o `CreateProcess` falha com `0x80070002` e a tarefa nunca sobe. O script resolve o `pwsh.exe` real dentro do pacote e, na falta dele, cai para o Windows PowerShell 5.1.
+
+Remover: `Unregister-ScheduledTask -TaskName ai-memory-serve -Confirm:$false`.
+
 ## Migrar do agentmemory
 
 Com o **agentmemory** rodando em `:3111` e o **ai-memory** em `:49374`:
